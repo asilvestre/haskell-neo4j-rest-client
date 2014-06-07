@@ -3,17 +3,18 @@
 
 module Database.Neo4j () where
 
+import Data.Monoid (mappend)
 import Data.Typeable (Typeable)
-import Control.Exception.Base (Exception, throw, catch)
-import Control.Applicative ((<$>))
+import Control.Exception.Base (Exception, throw, catch, toException)
+import Control.Applicative ((<$>), (<*>))
 import Control.Monad (mzero)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Resource (runResourceT, ResourceT)
 import Data.Default (def)
 import Data.Int (Int64)
 
-import qualified Data.Aeson as J ((.:))
-import qualified Data.Aeson.Types as JT
+import Data.Aeson ((.:))
+import qualified Data.Aeson as J
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
 import qualified Data.HashMap.Lazy as M
@@ -22,6 +23,8 @@ import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified Network.HTTP.Conduit as HC
 import qualified Network.HTTP.Types as HT
+
+(<>) = mappend
 
 
 data Val = IntVal Int64 | BoolVal Bool | TextVal T.Text | DoubleVal Double deriving (Show)
@@ -57,7 +60,7 @@ instance J.FromJSON PropertyValue where
 
 type Properties = M.HashMap T.Text PropertyValue
 
-data Node = Node {nodeLocation :: S.ByteString, nodeProperties :: Properties} deriving (Show)
+data Node = Node {nodeLocation :: T.Text, nodeProperties :: Properties} deriving (Show)
 
 instance J.FromJSON Node where
     parseJSON (J.Object v) = Node <$> v .: "self" <*> (v .: "data" >>= parseProperties)
@@ -71,7 +74,7 @@ newtype Label = Label {runLabel :: T.Text}
 
 -- | An error in handling a Cypher query, either in communicating with the server or parsing the result
 data Neo4jException = Neo4jServerException HC.HttpException | 
-					   Neo4jClientException S.ByteString deriving (Show, Typeable)
+					   Neo4jClientException String deriving (Show, Typeable)
 instance Exception Neo4jException
 
 data Connection = Connection {dbHostname :: Hostname, dbPort :: Port, manager :: HC.Manager}
@@ -113,7 +116,9 @@ httpReq (Connection h p m) method path body statusCheck = do
                     HC.path = path,
                     HC.method = method,
                     HC.requestBody = HC.RequestBodyLBS body,
-                    HC.checkStatus = \s r c -> if statusCheck s then Nothing else Just (HC.StatusCodeException s r c),
+                    HC.checkStatus = \s r c -> if statusCheck s
+                                                 then Nothing
+                                                 else Just (toException $ HC.StatusCodeException s r c),
                     HC.requestHeaders = [(HT.hAccept, "application/json; charset=UTF-8"),
                                           (HT.hContentType, "application/json")]}
             -- TODO: Would be better to use exceptions package Control.Monad.Catch ??
@@ -122,31 +127,39 @@ httpReq (Connection h p m) method path body statusCheck = do
 
 
 -- | Launch a POST, this will fail if no location header could be retrieved or 201 is not received
-httpCreate :: Connection -> S.ByteString -> L.ByteString -> ResourceT IO S.ByteString
+httpCreate :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString -> ResourceT IO a
 httpCreate conn path body = do
             res <- httpReq conn HT.methodPost path body (== HT.status201)
-            let headers = HC.responseHeaders res
-            -- Creation calls always return a location header, if we don't find it notify the error
-            return $ case M.lookup HT.hLocation (M.fromList headers) of
-                        Just location -> location
-                        Nothing -> throw $ Neo4jClientException "Missing location header"
+            let body = J.eitherDecode $ HC.responseBody res
+            return $ case body of
+                        Right entity -> entity
+                        Left e -> throw $ Neo4jClientException ("Error parsing created entity: " ++ e)
 
-httpRetrieve :: Connection -> S.ByteString -> ResourceT IO (Maybe L.ByteString)
+
+httpRetrieve :: J.FromJSON a => Connection -> S.ByteString -> ResourceT IO (Maybe a)
 httpRetrieve conn path = do
-            res <- httpReq conn HT.methodGet path "" (\s -> case s of HT.status200 -> 
+            res <- httpReq conn HT.methodGet path "" (\s -> s == HT.status200 || s == HT.status404)
+            let status = HC.responseStatus res
+            let body = if status == HT.status200
+                         then Just $ J.eitherDecode $ HC.responseBody res
+                         else Nothing
+            return $ case body of
+                        Just (Right entity) -> Just entity
+                        Just (Left e) -> throw $ Neo4jClientException ("Error parsing created entity: " ++ e)
+                        Nothing -> Nothing
 
+
+nodePath :: S.ByteString
 nodePath = "/db/data/node"
 
 createNode :: Properties -> Neo4j Node
 createNode props = Neo4j $ \conn ->  do
-            location <- httpCreate conn nodePath (J.encode props)
-            return $ Node location
+            httpCreate conn nodePath (J.encode props)
 
 
 getNode :: S.ByteString -> Neo4j (Maybe Node)
-getNode node_id = Neo4j $ \conn -> do
-            
-            
+getNode idNode = Neo4j $ \conn -> do
+            httpRetrieve conn (nodePath <> "/" <> idNode)
 
 
 createNodes :: Neo4j Node
