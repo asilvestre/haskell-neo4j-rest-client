@@ -30,6 +30,5 @@ library
                        aeson ==0.7.*,
                        vector ==0.10.*,
                        scientific ==0.3.*,
-                       unordered-containers ==0.2.*,
-                       attoparsec ==0.12.*
+                       unordered-containers ==0.2.*
         

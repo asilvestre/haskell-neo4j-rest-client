@@ -1,7 +1,11 @@
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
 
 module Database.Neo4j () where
 
+import Data.Typeable (Typeable)
+import Control.Exception.Base (Exception, throw, catch)
+import Control.Applicative ((<$>))
 import Control.Monad (mzero)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Resource (runResourceT, ResourceT)
@@ -9,7 +13,7 @@ import Data.Default (def)
 import Data.Int (Int64)
 
 import qualified Data.Aeson as J
-import qualified Data.Attoparsec.Number as AttoNum
+import qualified Data.Aeson.Types as JT
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
 import qualified Data.HashMap.Lazy as M
@@ -23,33 +27,47 @@ import qualified Network.HTTP.Types as HT
 data Val = IntVal Int64 | BoolVal Bool | TextVal T.Text | DoubleVal Double deriving (Show)
 data PropertyValue =  ValueProperty Val | ArrayProperty [Val] deriving (Show)
 
+
 instance J.ToJSON Val where
     toJSON (IntVal v)  = J.Number $ fromIntegral v
     toJSON (BoolVal v)  = J.Bool v
     toJSON (TextVal v)  = J.String v
     toJSON (DoubleVal v)  = J.Number $ Sci.fromFloatDigits v
 
+
 instance J.ToJSON PropertyValue where
     toJSON (ValueProperty v) = J.toJSON v
     toJSON (ArrayProperty vs) = J.Array (V.fromList $ map J.toJSON vs) 
 
-instance J.FromJSON PropertyValue where
-    parseJSON (J.Number (AttoNum.I v)) = IntVal v
-    parseJSON (J.Number (AttoNum.D v)) = DoubleVal v
-    parseJSON (J.Bool v) = BoolVal v
-    parseJSON (J.String v) = TextVal v
-    parseJSON (J.Array v) =  ArrayProperty $ map J.parseJSON (V.toList v)
+
+instance J.FromJSON Val where
+    parseJSON (J.Number v) = let parsedNum = Sci.floatingOrInteger v in
+                             return $ case parsedNum of
+                                         Left d -> DoubleVal d
+                                         Right i -> IntVal i
+    parseJSON (J.Bool v) = return $ BoolVal v
+    parseJSON (J.String v) = return $ TextVal v
     parseJSON _ = mzero
+
+
+instance J.FromJSON PropertyValue where
+    parseJSON (J.Array v) = ArrayProperty <$> mapM J.parseJSON (V.toList v)
+    parseJSON v = ValueProperty <$> J.parseJSON v
 
 
 type Properties = M.HashMap T.Text PropertyValue
 
-data Node = Node {nodeLocation :: L.ByteString}
+data Node = Node {nodeId :: S.ByteString} deriving (Show)
 
 data Relationship = Relationship
 
 newtype Label = Label {runLabel :: T.Text}
 
+
+-- | An error in handling a Cypher query, either in communicating with the server or parsing the result
+data Neo4jException = Neo4jServerException HC.HttpException | 
+					   Neo4jClientException S.ByteString deriving (Show, Typeable)
+instance Exception Neo4jException
 
 data Connection = Connection {dbHostname :: Hostname, dbPort :: Port, manager :: HC.Manager}
 
@@ -81,24 +99,50 @@ neo4j :: Connection -> Neo4j a -> ResourceT IO a
 neo4j con n = runNeo4j n con
 
 
-httpReq :: Connection -> HT.Method -> S.ByteString -> L.ByteString -> ResourceT IO (HT.ResponseHeaders, L.ByteString)
-httpReq (Connection h p m) method path body = do
-                                let request = def {
-                                        HC.host = h,
-                                        HC.port = p,
-                                        HC.path = path,
-                                        HC.method = method,
-                                        HC.requestBody = HC.RequestBodyLBS body,
-                                        HC.requestHeaders = [(HT.hAccept, "application/json; charset=UTF-8"),
-                                                              (HT.hContentType, "application/json")]}
-                                res <- HC.httpLbs request m
-                                return (HC.responseHeaders res, HC.responseBody res)
+httpReq :: Connection -> HT.Method -> S.ByteString -> L.ByteString -> (HT.Status -> Bool) ->
+     ResourceT IO (HC.Response L.ByteString)
+httpReq (Connection h p m) method path body statusCheck = do
+            let request = def {
+                    HC.host = h,
+                    HC.port = p,
+                    HC.path = path,
+                    HC.method = method,
+                    HC.requestBody = HC.RequestBodyLBS body,
+                    HC.checkStatus = \s r c -> if statusCheck s then Nothing else Just (HC.StatusCodeException s r c),
+                    HC.requestHeaders = [(HT.hAccept, "application/json; charset=UTF-8"),
+                                          (HT.hContentType, "application/json")]}
+            -- TODO: Would be better to use exceptions package Control.Monad.Catch ??
+            -- Wrapping up HTTP-Conduit exceptions in our own
+            liftIO (HC.httpLbs request m `catch` \e -> throw $ Neo4jServerException e)
 
+
+-- | Launch a POST, this will fail if no location header could be retrieved or 201 is not received
+httpCreate :: Connection -> S.ByteString -> L.ByteString -> ResourceT IO S.ByteString
+httpCreate conn path body = do
+            res <- httpReq conn HT.methodPost path body (== HT.status201)
+            let headers = HC.responseHeaders res
+            -- Creation calls always return a location header, if we don't find it notify the error
+            return $ case M.lookup HT.hLocation (M.fromList headers) >>= extractId of
+                        Just entityId -> entityId
+                        Nothing -> throw $ Neo4jClientException "Missing or incorrect location header"
+    -- This function gets the id from the location header, the id appears after the path used for the POST
+    where extractId loc = S.stripPrefix slashedPath loc
+          slashedPath = if S.null path || S.last path == '/' then path else S.concat path '/'
+                        
+
+nodePath = "/db/data/node"
 
 createNode :: Properties -> Neo4j Node
 createNode props = Neo4j $ \conn ->  do
-                        (headers, body) <- httpReq conn "POST" "/db/data/node" ""
-                        return $ Node "Myloc"
+            idNode <- httpCreate conn nodePath (J.encode props)
+            return $ Node idNode 
+
+
+getNode :: T.Text -> Neo4j (Maybe Node)
+getNode node_id = Neo4j $ \conn -> do
+            
+            
+
 
 createNodes :: Neo4j Node
 createNodes = do
