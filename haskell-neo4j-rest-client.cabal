@@ -16,13 +16,20 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 library
-  -- exposed-modules:     
+  exposed-modules:     Database.Neo4j
   -- other-modules:       
   build-depends:       base ==4.6.*,
-                       containers==0.5.*,
-                       text==1.1.*,
-                       http-conduit==2.1.*,
-                       http-types=0.8.*,
-                       bytestring==0.10.*,
-                       resourcet==1.1.*,
-                       data-default==0.5.*,
+                       containers ==0.5.*,
+                       text ==1.1.*,
+                       http-conduit ==2.1.*,
+                       http-types ==0.8.*,
+                       bytestring ==0.10.*,
+                       resourcet ==1.1.*,
+                       data-default ==0.5.*,
+                       transformers ==0.4.*,
+                       aeson ==0.7.*,
+                       vector ==0.10.*,
+                       scientific ==0.3.*,
+                       unordered-containers ==0.2.*,
+                       attoparsec ==0.12.*
+        
