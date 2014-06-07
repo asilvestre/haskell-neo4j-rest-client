@@ -12,7 +12,7 @@ import Control.Monad.Trans.Resource (runResourceT, ResourceT)
 import Data.Default (def)
 import Data.Int (Int64)
 
-import qualified Data.Aeson as J
+import qualified Data.Aeson as J ((.:))
 import qualified Data.Aeson.Types as JT
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
@@ -57,7 +57,12 @@ instance J.FromJSON PropertyValue where
 
 type Properties = M.HashMap T.Text PropertyValue
 
-data Node = Node {nodeId :: S.ByteString} deriving (Show)
+data Node = Node {nodeLocation :: S.ByteString, nodeProperties :: Properties} deriving (Show)
+
+instance J.FromJSON Node where
+    parseJSON (J.Object v) = Node <$> v .: "self" <*> (v .: "data" >>= parseProperties)
+        where parseProperties propJson = J.parseJSON propJson
+
 
 data Relationship = Relationship
 
@@ -122,23 +127,23 @@ httpCreate conn path body = do
             res <- httpReq conn HT.methodPost path body (== HT.status201)
             let headers = HC.responseHeaders res
             -- Creation calls always return a location header, if we don't find it notify the error
-            return $ case M.lookup HT.hLocation (M.fromList headers) >>= extractId of
-                        Just entityId -> entityId
-                        Nothing -> throw $ Neo4jClientException "Missing or incorrect location header"
-    -- This function gets the id from the location header, the id appears after the path used for the POST
-    where extractId loc = S.stripPrefix slashedPath loc
-          slashedPath = if S.null path || S.last path == '/' then path else S.concat path '/'
-                        
+            return $ case M.lookup HT.hLocation (M.fromList headers) of
+                        Just location -> location
+                        Nothing -> throw $ Neo4jClientException "Missing location header"
+
+httpRetrieve :: Connection -> S.ByteString -> ResourceT IO (Maybe L.ByteString)
+httpRetrieve conn path = do
+            res <- httpReq conn HT.methodGet path "" (\s -> case s of HT.status200 -> 
 
 nodePath = "/db/data/node"
 
 createNode :: Properties -> Neo4j Node
 createNode props = Neo4j $ \conn ->  do
-            idNode <- httpCreate conn nodePath (J.encode props)
-            return $ Node idNode 
+            location <- httpCreate conn nodePath (J.encode props)
+            return $ Node location
 
 
-getNode :: T.Text -> Neo4j (Maybe Node)
+getNode :: S.ByteString -> Neo4j (Maybe Node)
 getNode node_id = Neo4j $ \conn -> do
             
             
