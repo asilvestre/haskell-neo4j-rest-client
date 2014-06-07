@@ -20,6 +20,7 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Scientific as Sci
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
 import qualified Network.HTTP.Conduit as HC
 import qualified Network.HTTP.Types as HT
@@ -89,9 +90,11 @@ newConnection hostname port = do
         return $ Connection hostname port manager
 
 
-withConnection :: Hostname -> Port -> IO Connection
-withConnection hostname port = runResourceT $ newConnection hostname port
-
+withConnection :: Hostname -> Port -> Neo4j a -> IO a 
+withConnection hostname port cmds = runResourceT $ do
+        conn <- newConnection hostname port
+        runNeo4j cmds conn
+        
 
 newtype Neo4j a = Neo4j { runNeo4j :: Connection -> ResourceT IO a }
 
@@ -101,6 +104,10 @@ instance Monad Neo4j where
     (Neo4j cmd) >>= f = Neo4j $ \con -> do
                             a <- cmd con
                             runNeo4j (f a) con
+
+instance MonadIO Neo4j where
+	liftIO f = Neo4j $ const (liftIO f)
+
 
 
 neo4j :: Connection -> Neo4j a -> ResourceT IO a
@@ -162,7 +169,16 @@ getNode idNode = Neo4j $ \conn -> do
             httpRetrieve conn (nodePath <> "/" <> idNode)
 
 
-createNodes :: Neo4j Node
-createNodes = do
-        createNode M.empty
-        createNode M.empty
+test = do
+        withConnection "localhost" 7474 $ do
+                node <- createNode $ M.fromList [("hola", ValueProperty $ IntVal 1), 
+                                                    ("uuu", ArrayProperty [DoubleVal 2.4, DoubleVal 0.99]),
+                                                ("adeu", ValueProperty $ TextVal "hol")]
+                let nodeId = S.drop (S.length $ nodePath <> "/") (TE.encodeUtf8 $ nodeLocation node)
+                newNode <- getNode nodeId
+                otherNewNode <- getNode "4"
+                liftIO $ putStrLn $ show node
+                liftIO $ putStrLn $ show nodeId 
+                liftIO $ putStrLn $ show newNode
+                liftIO $ putStrLn $ show otherNewNode
+                return node
