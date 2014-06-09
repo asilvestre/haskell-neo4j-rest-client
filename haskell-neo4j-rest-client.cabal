@@ -15,10 +15,24 @@ category:            Database
 build-type:          Simple
 cabal-version:       >=1.8
 
+Test-Suite test-haskell-neo4j-rest-client
+     Type:           exitcode-stdio-1.0
+     Hs-Source-Dirs: src, tests
+     Main-is:        TestMain.hs
+     Build-Depends:  base ==4.6.*,
+                     bytestring ==0.10.*,
+                     test-framework ==0.8.*,
+                     test-framework-quickcheck2 ==0.3.*,
+                     QuickCheck ==2.7.*,
+                     test-framework-hunit ==0.3.*,
+                     test-framework-th ==0.2.*,
+                     HUnit ==1.2.*,
+                     Cabal
+
 library
-  hs-source-dirs: src
-  exposed-modules: Database.Neo4j
-  -- other-modules:       
+  hs-source-dirs:      src
+  exposed-modules:     Database.Neo4j
+  other-modules:       Database.Neo4j.Types, Database.Neo4j.Http, Database.Neo4j.Node, Database.Neo4j.Relationship
   build-depends:       base ==4.6.*,
                        containers ==0.5.*,
                        text ==1.1.*,
