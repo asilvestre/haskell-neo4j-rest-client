@@ -73,9 +73,7 @@ data Relationship = Relationship
 newtype Label = Label {runLabel :: T.Text}
 
 
--- | An error in handling a Cypher query, either in communicating with the server or parsing the result
-data Neo4jException = Neo4jServerException HC.HttpException | 
-					   Neo4jClientException String deriving (Show, Typeable)
+data Neo4jException = Neo4jServerException HC.HttpException | Neo4jClientException String deriving (Show, Typeable)
 instance Exception Neo4jException
 
 data Connection = Connection {dbHostname :: Hostname, dbPort :: Port, manager :: HC.Manager}
