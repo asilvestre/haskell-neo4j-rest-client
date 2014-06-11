@@ -22,6 +22,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
 import qualified Network.HTTP.Conduit as HC
+import qualified Network.URI as NU
 
 (<>) :: S.ByteString -> S.ByteString -> S.ByteString
 (<>) = mappend
@@ -96,19 +97,22 @@ instance J.FromJSON PropertyValue where
 -- | We use hashmaps to represent Neo4j properties
 type Properties = M.HashMap T.Text PropertyValue
 
--- | Representation of a Neo4j node, has a location URI and a set of properties
-data Node = Node {nodeLocation :: T.Text, nodeProperties :: Properties} deriving (Show)
-
 -- | Type used for entity ID's
 type EntityId = S.ByteString
 
--- | Get the URI path for a node
-nodePath :: Node -> S.ByteString
-nodePath = TE.encodeUtf8 . nodeLocation
+-- | Representation of a Neo4j node, has a location URI and a set of properties
+data Node = Node {nodeId :: EntityId, nodeProperties :: Properties} deriving (Show)
+
+-- | Get the Entity ID from an entity URI
+entityIdFromURI :: S.ByteString -> EntityId
+entityIdFromURI uri = case NU.parseURI $ show $ S.unpack uri of
+                        Just parsed -> S.pack $ read $ NU.uriPath parsed
+                        Nothing -> uri
 
 -- | JSON to Node
 instance J.FromJSON Node where
-    parseJSON (J.Object v) = Node <$> v .: "self" <*> (v .: "data" >>= J.parseJSON)
+    parseJSON (J.Object v) = Node <$> (v .: "self" >>= parseSelf) <*> (v .: "data" >>= J.parseJSON)
+        where parseSelf s = return $ entityIdFromURI . TE.encodeUtf8 $ s
     parseJSON _ = mzero
 
 -- | Type for a relationship type description

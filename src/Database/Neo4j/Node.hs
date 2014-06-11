@@ -22,7 +22,7 @@ getNodeById idNode = Neo4j $ \conn -> httpRetrieve conn (nodeAPI <> "/" <> idNod
 
 -- | Refresh a node entity with the contents in the DB
 getNode :: Node -> Neo4j (Maybe Node)
-getNode n = Neo4j $ \conn -> httpRetrieve conn (nodePath n)
+getNode n = Neo4j $ \conn -> httpRetrieve conn (nodeId n)
 
 -- | Delete a node by ID, the deletion will fail if the node is not orphan, if that happens the result will be False
 deleteNodeById :: S.ByteString -> Neo4j Bool
@@ -30,4 +30,4 @@ deleteNodeById idNode = Neo4j $ \conn -> httpDelete conn (nodeAPI <> "/" <> idNo
 
 -- | Delete a node, the deletion will fail if the node is not orphan, if that happens the result will be False
 deleteNode :: Node -> Neo4j Bool
-deleteNode n = Neo4j $ \conn -> httpDelete conn (nodePath n) True
+deleteNode n = Neo4j $ \conn -> httpDelete conn (nodeId n) True
