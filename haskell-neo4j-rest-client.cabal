@@ -45,6 +45,5 @@ library
                        aeson ==0.7.*,
                        vector ==0.10.*,
                        scientific ==0.3.*,
-                       unordered-containers ==0.2.*,
-                       network ==2.5.*
+                       unordered-containers ==0.2.*
         

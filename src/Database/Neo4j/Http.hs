@@ -15,7 +15,7 @@ import qualified Network.HTTP.Types as HT
 
 import Database.Neo4j.Types
 
-    
+
 -- | Create a new connection that can be manually closed with runResourceT
 newConnection :: Hostname -> Port -> ResourceT IO Connection
 newConnection hostname port = do

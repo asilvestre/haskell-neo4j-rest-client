@@ -12,6 +12,7 @@ import Control.Monad (mzero)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Resource (ResourceT)
 import Data.Int (Int64)
+import Data.Maybe (fromMaybe)
 
 import Data.Aeson ((.:))
 import qualified Data.Aeson as J
@@ -22,7 +23,6 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
 import qualified Network.HTTP.Conduit as HC
-import qualified Network.URI as NU
 
 (<>) :: S.ByteString -> S.ByteString -> S.ByteString
 (<>) = mappend
@@ -97,26 +97,28 @@ instance J.FromJSON PropertyValue where
 -- | We use hashmaps to represent Neo4j properties
 type Properties = M.HashMap T.Text PropertyValue
 
--- | Type used for entity ID's
-type EntityId = S.ByteString
+-- | Tries to get the path from a URL, we try our best otherwise return the url as is
+urlPath :: T.Text -> S.ByteString
+urlPath url = TE.encodeUtf8 $ fromMaybe url $ T.stripPrefix "http://" url >>= return . T.dropWhile (/='/')
+    
+-- | Get the path for a node entity without host and port
+nodePath :: Node -> S.ByteString
+nodePath = urlPath . nodeLocation
 
 -- | Representation of a Neo4j node, has a location URI and a set of properties
-data Node = Node {nodeId :: EntityId, nodeProperties :: Properties} deriving (Show)
-
--- | Get the Entity ID from an entity URI
-entityIdFromURI :: S.ByteString -> EntityId
-entityIdFromURI uri = case NU.parseURI $ show $ S.unpack uri of
-                        Just parsed -> S.pack $ read $ NU.uriPath parsed
-                        Nothing -> uri
+data Node = Node {nodeLocation :: T.Text, nodeProperties :: Properties} deriving (Show)
 
 -- | JSON to Node
 instance J.FromJSON Node where
-    parseJSON (J.Object v) = Node <$> (v .: "self" >>= parseSelf) <*> (v .: "data" >>= J.parseJSON)
-        where parseSelf s = return $ entityIdFromURI . TE.encodeUtf8 $ s
+    parseJSON (J.Object v) = Node <$> (v .: "self") <*> (v .: "data" >>= J.parseJSON)
     parseJSON _ = mzero
 
 -- | Type for a relationship type description
 type RelationshipType = T.Text
+
+-- | Get the path for a node entity without host and port
+relPath :: Relationship -> S.ByteString
+relPath = urlPath . relLocation
 
 -- | Type for a Neo4j relationship, has a location URI, a relationship type, a starting node and a destination node
 data Relationship = Relationship {relLocation :: T.Text,
@@ -130,10 +132,6 @@ instance J.FromJSON Relationship where
     parseJSON (J.Object v) = Relationship <$> v .: "self" <*> v .: "type" <*> (v .: "data" >>= J.parseJSON) <*>
                                 v .: "start" <*> v .: "end"
     parseJSON _ = mzero
-
--- | Get the URI path for a relationship
-relPath :: Relationship -> S.ByteString
-relPath = TE.encodeUtf8 . relLocation
 
 -- | Type for a label
 newtype Label = Label {runLabel :: T.Text}
