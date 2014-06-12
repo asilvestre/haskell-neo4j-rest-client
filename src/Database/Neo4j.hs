@@ -1,6 +1,37 @@
 {-# LANGUAGE OverloadedStrings  #-}
 
-module Database.Neo4j where
+-- |
+-- Module:      Database.Neo4j
+-- Copyright:   (c) 2014, Antoni Silvestre
+-- License:     MIT
+-- Maintainer:  Antoni Silvestre <antoni.silvestre@gmail.com>
+-- Stability:   experimental
+-- Portability: portable
+--
+-- Library to interact with the Neo4j REST API.
+--
+
+module Database.Neo4j (
+    -- * How to use this library
+    -- $use
+
+    -- * Connection handling objects
+    Connection(..), Hostname, Port, newConnection, withConnection,
+    -- * Main monadic type to handle sequences of commands to Neo4j
+    Neo4j(..),
+    -- * Constructing and managing node/relationship properties
+    Val(..), PropertyValue(..), (|:), Properties, emptyProperties, getProperties, getProperty, setProperties,
+        setProperty, deleteProperties, deleteProperty, 
+    -- * Managing nodes
+    Node(..), createNode, getNodeById, getNode, deleteNodeById, deleteNode,
+    -- * Managing relationships
+    Relationship(..), Direction(..), RelationshipType, createRelationship, getRelationshipById, getRelationship,
+        deleteRelationshipById, deleteRelationship, getRelationships,
+    -- * Managing labels and getting nodes by label
+    Label, allLabels, getLabels, getNodesByLabelAndProperty, addLabels, changeLabels, removeLabel, removeLabels,
+    -- * Exceptions
+    Neo4jException(..),
+    ) where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 
@@ -12,6 +43,9 @@ import qualified Data.Text.Encoding as TE
 import Database.Neo4j.Types
 import Database.Neo4j.Http
 import Database.Neo4j.Node
+import Database.Neo4j.Relationship
+import Database.Neo4j.Property
+import Database.Neo4j.Label
 
 test :: IO Node
 test = withConnection "localhost" 7474 $ do

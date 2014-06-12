@@ -42,9 +42,6 @@ deleteRelationship rel = Neo4j $ \conn -> do
             _ <- httpDelete conn (relPath rel) False
             return ()
 
--- | Relationship direction
-data Direction = Outgoing | Incoming | Any
-
 -- | Get all relationships for a node, if the node has disappeared it will raise an exception
 getRelationships :: Node -> Direction -> [Label] -> Neo4j [Relationship]
 getRelationships n dir lblFilter = Neo4j $ \conn -> 
@@ -53,4 +50,4 @@ getRelationships n dir lblFilter = Neo4j $ \conn ->
           dirStr Incoming = "in"
           dirStr Any = "all"
           filterStr [] = ""
-          filterStr f = "/" <> TE.encodeUtf8 (T.intercalate "%26" (map runLabel f))
+          filterStr f = "/" <> TE.encodeUtf8 (T.intercalate "%26" f)

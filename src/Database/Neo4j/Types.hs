@@ -131,6 +131,9 @@ instance Entity Node where
 -- | Type for a relationship type description
 type RelationshipType = T.Text
 
+-- | Relationship direction
+data Direction = Outgoing | Incoming | Any
+
 -- | Get the path for a node entity without host and port
 relPath :: Relationship -> S.ByteString
 relPath = urlPath . relLocation
