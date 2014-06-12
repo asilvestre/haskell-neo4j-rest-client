@@ -97,6 +97,10 @@ instance J.FromJSON PropertyValue where
 -- | We use hashmaps to represent Neo4j properties
 type Properties = M.HashMap T.Text PropertyValue
 
+-- | Shortcut for emtpy properties
+emptyProperties :: M.HashMap T.Text PropertyValue
+emptyProperties = M.empty
+
 -- | Tries to get the path from a URL, we try our best otherwise return the url as is
 urlPath :: T.Text -> S.ByteString
 urlPath url = TE.encodeUtf8 $ fromMaybe url $ T.stripPrefix "http://" url >>= return . T.dropWhile (/='/')

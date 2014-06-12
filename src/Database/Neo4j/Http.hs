@@ -70,6 +70,21 @@ httpRetrieve conn path = do
                         Just (Left e) -> throw $ Neo4jClientException ("Error parsing created entity: " ++ e)
                         Nothing -> Nothing
 
+-- | Launch a GET request that results in JSON value, this will raise an exception if 200 or 404 is not received
+httpRetrieveValue :: J.FromJSON a => Connection -> S.ByteString -> ResourceT IO (Maybe a)
+httpRetrieveValue conn path = do
+            res <- httpReq conn HT.methodGet path "" (\s -> s == HT.status200 || s == HT.status404)
+            let status = HC.responseStatus res
+            let body = if status == HT.status200
+                         -- Ugly hack to parse values that aren't top level JSON values (objects and arrays)
+                         then Just $ J.eitherDecode $ "[" `L.append` HC.responseBody res `L.append` "]" 
+                         else Nothing
+            return $ case body of
+                        Just (Right (entity:[])) -> Just entity
+                        Just (Right _) -> throw $ Neo4jClientException "Error parsing created entity"
+                        Just (Left e) -> throw $ Neo4jClientException ("Error parsing created entity: " ++ e)
+                        Nothing -> Nothing
+
 
 -- | Launch a DELETE request, this will raise an exception if 204 is not received
 --   Optionally, if passing acceptConflict as True, 409 is accepted too, receiveing 409 makes the function return False
@@ -78,3 +93,10 @@ httpDelete c pth acceptConflict = do
             res <- httpReq c HT.methodDelete pth "" (\s -> s == HT.status204 || (acceptConflict && s == HT.status409))
             let status = HC.responseStatus res
             return $ status == HT.status204
+
+
+-- | Launch a PUT request, this will raise an exception if 200 or 204 is not received
+httpModify :: Connection -> S.ByteString -> L.ByteString -> ResourceT IO ()
+httpModify c path body = do
+            _ <- httpReq c HT.methodPut path body (\s -> s == HT.status200 || s == HT.status204)
+            return ()
