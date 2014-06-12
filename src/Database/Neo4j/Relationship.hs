@@ -2,12 +2,10 @@
 
 module Database.Neo4j.Relationship where
 
-import Data.Maybe (fromMaybe)
 
 import Data.Aeson ((.=))
 import qualified Data.Aeson as J
 import qualified Data.ByteString as S
-import qualified Data.HashMap.Lazy as H
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 
@@ -47,41 +45,12 @@ deleteRelationship rel = Neo4j $ \conn -> do
 -- | Relationship direction
 data Direction = Outgoing | Incoming | Any
 
--- | Get all relationships for a node, if the node is not present any more we'll just return []
--- TODO This should return an exception if 404
+-- | Get all relationships for a node, if the node has disappeared it will raise an exception
 getRelationships :: Node -> Direction -> [Label] -> Neo4j [Relationship]
-getRelationships n dir lblFilter = Neo4j $ \conn -> do
-            maybeRes <- httpRetrieve conn (nodePath n <> "/relationships/" <> dirStr dir <> filterStr lblFilter)
-            return $ fromMaybe [] maybeRes
+getRelationships n dir lblFilter = Neo4j $ \conn -> 
+            httpRetrieveSure conn (nodePath n <> "/relationships/" <> dirStr dir <> filterStr lblFilter)
     where dirStr Outgoing = "out"
           dirStr Incoming = "in"
           dirStr Any = "all"
           filterStr [] = ""
           filterStr f = "/" <> TE.encodeUtf8 (T.intercalate "%26" (map runLabel f))
-
--- | API path for relationship properties
-relPropertiesAPI :: Relationship -> S.ByteString
-relPropertiesAPI rel = relPath rel <> "/properties"
-
--- | Retrieve relationship properties from the DB, if the entity is not present it will return empty properties
-relationshipPropertiesFromDB :: Relationship -> Neo4j Properties
-relationshipPropertiesFromDB rel = Neo4j $ \conn -> do
-            maybeProps <- httpRetrieve conn (relPropertiesAPI rel)
-            return $ fromMaybe emptyProperties maybeProps
-
--- | Set all relationship properties
-setRelationshipProperties :: Relationship -> Properties -> Neo4j Relationship
-setRelationshipProperties rel props =  Neo4j $ \conn -> do
-            httpModify conn (relPropertiesAPI rel) $ J.encode props
-            return $ rel {relProperties = props}
-
--- | Get a relationship property
-getRelationshipProperty :: Relationship -> T.Text -> Neo4j (Maybe PropertyValue)
-getRelationshipProperty rel prop =  Neo4j $ \conn -> httpRetrieveValue conn (
-            relPropertiesAPI rel <> "/" <> TE.encodeUtf8 prop)
-
--- | Set a relationship property
-setRelationshipProperty :: Relationship -> T.Text -> PropertyValue -> Neo4j Relationship
-setRelationshipProperty rel name value =  Neo4j $ \conn -> do
-            httpModify conn (relPropertiesAPI rel <> "/" <> TE.encodeUtf8 name) $ J.encode value
-            return $ rel {relProperties = H.insert name value (relProperties rel)}

@@ -32,7 +32,8 @@ Test-Suite test-haskell-neo4j-rest-client
 library
   hs-source-dirs:      src
   exposed-modules:     Database.Neo4j
-  other-modules:       Database.Neo4j.Types, Database.Neo4j.Http, Database.Neo4j.Node, Database.Neo4j.Relationship
+  other-modules:       Database.Neo4j.Types, Database.Neo4j.Http, Database.Neo4j.Node, Database.Neo4j.Relationship,
+                       Database.Neo4j.Property, Database.Neo4j.Label
   build-depends:       base ==4.6.*,
                        containers ==0.5.*,
                        text ==1.1.*,
@@ -45,5 +46,6 @@ library
                        aeson ==0.7.*,
                        vector ==0.10.*,
                        scientific ==0.3.*,
-                       unordered-containers ==0.2.*
+                       unordered-containers ==0.2.*,
+                       HTTP ==4000.2.*
         

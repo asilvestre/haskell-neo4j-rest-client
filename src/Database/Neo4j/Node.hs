@@ -12,10 +12,6 @@ import Database.Neo4j.Http
 nodeAPI :: S.ByteString
 nodeAPI = "/db/data/node"
 
--- | Get the path for a node entity without host and port
-nodePath :: Node -> S.ByteString
-nodePath = urlPath . nodeLocation
-
 -- | Create a new node with a set of properties
 createNode :: Properties -> Neo4j Node
 createNode props = Neo4j $ \conn -> httpCreate conn nodeAPI (J.encode props)

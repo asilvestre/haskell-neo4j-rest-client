@@ -104,6 +104,12 @@ emptyProperties = M.empty
 -- | Tries to get the path from a URL, we try our best otherwise return the url as is
 urlPath :: T.Text -> S.ByteString
 urlPath url = TE.encodeUtf8 $ fromMaybe url $ T.stripPrefix "http://" url >>= return . T.dropWhile (/='/')
+
+-- | Class for top-level Neo4j entities (nodes and relationships) useful to have generic property management code
+class Entity a where
+    propertyPath :: a -> S.ByteString
+    getEntityProperties :: a -> Properties
+    setEntityProperties :: a -> Properties -> a
     
 -- | Get the path for a node entity without host and port
 nodePath :: Node -> S.ByteString
@@ -116,6 +122,11 @@ data Node = Node {nodeLocation :: T.Text, nodeProperties :: Properties} deriving
 instance J.FromJSON Node where
     parseJSON (J.Object v) = Node <$> (v .: "self") <*> (v .: "data" >>= J.parseJSON)
     parseJSON _ = mzero
+
+instance Entity Node where
+    propertyPath n = nodePath n <> "/properties"
+    getEntityProperties = nodeProperties
+    setEntityProperties n props = n {nodeProperties = props}
 
 -- | Type for a relationship type description
 type RelationshipType = T.Text
@@ -137,8 +148,13 @@ instance J.FromJSON Relationship where
                                 v .: "start" <*> v .: "end"
     parseJSON _ = mzero
 
+instance Entity Relationship where
+    propertyPath r = relPath r <> "/properties"
+    getEntityProperties = relProperties
+    setEntityProperties r props = r {relProperties = props}
+
 -- | Type for a label
-newtype Label = Label {runLabel :: T.Text}
+type Label = T.Text
 
 -- | Exceptions this library can raise
 data Neo4jException = Neo4jServerException HC.HttpException | Neo4jClientException String deriving (Show, Typeable)
