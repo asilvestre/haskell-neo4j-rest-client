@@ -45,7 +45,9 @@ httpReq (Connection h p m) method path body statusCheck = do
                                           (HT.hContentType, "application/json")]}
             -- TODO: Would be better to use exceptions package Control.Monad.Catch ??
             -- Wrapping up HTTP-Conduit exceptions in our own
-            liftIO (HC.httpLbs request m `catch` \e -> throw $ Neo4jServerException e)
+            liftIO $ HC.httpLbs request m `catch` wrapException
+    where wrapException :: HC.HttpException -> a
+          wrapException = throw . Neo4jHttpException
 
 -- | Launch a POST request, this will raise an exception if 201 or 204 is not received
 httpCreate :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString -> ResourceT IO a
@@ -54,7 +56,7 @@ httpCreate conn path body = do
             let resBody = J.eitherDecode $ HC.responseBody res
             return $ case resBody of
                         Right entity -> entity
-                        Left e -> throw $ Neo4jClientException ("Error parsing created entity: " ++ e)
+                        Left e -> throw $ Neo4jParseException ("Error parsing created entity: " ++ e)
 
 -- | Launch a POST request that doesn't expect response body, this will raise an exception if 204 is not received
 httpCreate_ :: Connection -> S.ByteString -> L.ByteString -> ResourceT IO ()
@@ -72,7 +74,7 @@ httpRetrieve conn path = do
                          else Nothing
             return $ case body of
                         Just (Right entity) -> Just entity
-                        Just (Left e) -> throw $ Neo4jClientException ("Error parsing received entity: " ++ e)
+                        Just (Left e) -> throw $ Neo4jParseException ("Error parsing received entity: " ++ e)
                         Nothing -> Nothing
 
 -- | Launch GET request, just allow 200, if 404 is received an exception will be raised
@@ -82,7 +84,7 @@ httpRetrieveSure conn path = do
             let body = J.eitherDecode $ HC.responseBody res
             return $ case body of
                         Right entity -> entity
-                        Left e -> throw $ Neo4jClientException ("Error parsing received entity: " ++ e)
+                        Left e -> throw $ Neo4jParseException ("Error parsing received entity: " ++ e)
 
 -- | Launch a GET request, this will raise an exception if 200 or 404 is not received
 --   Unlike httpRetrieve this method can parse any JSON value even if it's non-top (arrays and objects)
@@ -96,8 +98,8 @@ httpRetrieveValue conn path = do
                          else Nothing
             return $ case body of
                         Just (Right (entity:[])) -> Just entity
-                        Just (Right _) -> throw $ Neo4jClientException "Error parsing received entity"
-                        Just (Left e) -> throw $ Neo4jClientException ("Error parsing received entity: " ++ e)
+                        Just (Right _) -> throw $ Neo4jParseException "Error parsing received entity"
+                        Just (Left e) -> throw $ Neo4jParseException ("Error parsing received entity: " ++ e)
                         Nothing -> Nothing
 
 

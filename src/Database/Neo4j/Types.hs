@@ -160,7 +160,7 @@ instance Entity Relationship where
 type Label = T.Text
 
 -- | Exceptions this library can raise
-data Neo4jException = Neo4jServerException HC.HttpException | Neo4jClientException String deriving (Show, Typeable)
+data Neo4jException = Neo4jHttpException HC.HttpException | Neo4jParseException String deriving (Show, Typeable)
 instance Exception Neo4jException
 
 -- | Type for a connection

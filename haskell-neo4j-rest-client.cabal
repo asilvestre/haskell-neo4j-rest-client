@@ -27,8 +27,18 @@ Test-Suite test-haskell-neo4j-rest-client
                      test-framework-hunit ==0.3.*,
                      test-framework-th ==0.2.*,
                      HUnit ==1.2.*,
-                     Cabal
-
+                     Cabal,
+                     text ==1.1.*,
+                     http-conduit ==2.1.*,
+                     http-types ==0.8.*,
+                     resourcet ==1.1.*,
+                     data-default ==0.5.*,
+                     transformers ==0.4.*,
+                     aeson ==0.7.*,
+                     vector ==0.10.*,
+                     scientific ==0.3.*,
+                     unordered-containers ==0.2.*,
+                     HTTP ==4000.2.*
 library
   hs-source-dirs:      src
   exposed-modules:     Database.Neo4j
