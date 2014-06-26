@@ -38,16 +38,16 @@ httpReq (Connection h p m) method path body statusCheck = do
                     HC.path = path,
                     HC.method = method,
                     HC.requestBody = HC.RequestBodyLBS body,
-                    HC.checkStatus = \s r c -> if statusCheck s
+                    HC.checkStatus = \s _ _ -> if statusCheck s
                                                  then Nothing
-                                                 else Just (toException $ HC.StatusCodeException s r c),
+                                                 else Just (toException $ Neo4jUnexpectedResponseException s),
                     HC.requestHeaders = [(HT.hAccept, "application/json; charset=UTF-8"),
                                           (HT.hContentType, "application/json")]}
             -- TODO: Would be better to use exceptions package Control.Monad.Catch ??
             -- Wrapping up HTTP-Conduit exceptions in our own
             liftIO $ HC.httpLbs request m `catch` wrapException
     where wrapException :: HC.HttpException -> a
-          wrapException = throw . Neo4jHttpException
+          wrapException = throw . Neo4jHttpException . show
 
 -- | Launch a POST request, this will raise an exception if 201 or 204 is not received
 httpCreate :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString -> ResourceT IO a
@@ -105,11 +105,13 @@ httpRetrieveValue conn path = do
 
 -- | Launch a DELETE request, this will raise an exception if 204 is not received
 --   Optionally, if passing acceptConflict as True, 409 is accepted too, receiveing 409 makes the function return False
+--   If receive 404, we will just return true, though wasn't existing already the result is the same
 httpDelete :: Connection -> S.ByteString -> Bool -> ResourceT IO Bool
 httpDelete c pth acceptConflict = do
-            res <- httpReq c HT.methodDelete pth "" (\s -> s == HT.status204 || (acceptConflict && s == HT.status409))
+            res <- httpReq c HT.methodDelete pth "" (\s -> s == HT.status204 || s == HT.status404 ||
+                                                     (acceptConflict && s == HT.status409))
             let status = HC.responseStatus res
-            return $ status == HT.status204
+            return $ status /= HT.status409
 
 
 -- | Launch a PUT request, this will raise an exception if 200 or 204 is not received

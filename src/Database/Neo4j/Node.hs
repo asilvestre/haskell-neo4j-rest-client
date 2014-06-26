@@ -12,6 +12,11 @@ import Database.Neo4j.Http
 nodeAPI :: S.ByteString
 nodeAPI = "/db/data/node"
 
+-- | Get the ID of a node
+nodeId :: Node -> S.ByteString
+nodeId n = S.drop (pathLength + 1) (nodePath n)
+    where pathLength = S.length nodeAPI
+
 -- | Create a new node with a set of properties
 createNode :: Properties -> Neo4j Node
 createNode props = Neo4j $ \conn -> httpCreate conn nodeAPI (J.encode props)

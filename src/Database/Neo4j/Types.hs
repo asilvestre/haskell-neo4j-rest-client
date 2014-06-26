@@ -23,17 +23,18 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
 import qualified Network.HTTP.Conduit as HC
+import qualified Network.HTTP.Types as HT
 
 (<>) :: S.ByteString -> S.ByteString -> S.ByteString
 (<>) = mappend
 
 -- | Type for a single value of a Neo4j property
-data Val = IntVal Int64 | BoolVal Bool | TextVal T.Text | DoubleVal Double deriving (Show)
+data Val = IntVal Int64 | BoolVal Bool | TextVal T.Text | DoubleVal Double deriving (Show, Eq)
 
 -- | Wrapping type for a Neo4j single property or array of properties
 --   Using these types allows type checking for only correct properties
 --   that is int, double, string, boolean and single typed arrays of these, also nulls are not allowed
-data PropertyValue = ValueProperty Val | ArrayProperty [Val] deriving (Show)
+data PropertyValue = ValueProperty Val | ArrayProperty [Val] deriving (Show, Eq)
 
 -- | This class allows easy construction of property value types from literals
 class PropertyValueConstructor a where
@@ -116,7 +117,7 @@ nodePath :: Node -> S.ByteString
 nodePath = urlPath . nodeLocation
 
 -- | Representation of a Neo4j node, has a location URI and a set of properties
-data Node = Node {nodeLocation :: T.Text, nodeProperties :: Properties} deriving (Show)
+data Node = Node {nodeLocation :: T.Text, nodeProperties :: Properties} deriving (Show, Eq)
 
 -- | JSON to Node
 instance J.FromJSON Node where
@@ -160,8 +161,16 @@ instance Entity Relationship where
 type Label = T.Text
 
 -- | Exceptions this library can raise
-data Neo4jException = Neo4jHttpException HC.HttpException | Neo4jParseException String deriving (Show, Typeable)
+data Neo4jException = Neo4jHttpException String |
+                      Neo4jUnexpectedResponseException HT.Status |
+                      Neo4jParseException String deriving (Show, Typeable)
 instance Exception Neo4jException
+
+instance Eq Neo4jException where
+    (Neo4jHttpException msg) == (Neo4jHttpException msg2) = msg == msg2
+    (Neo4jUnexpectedResponseException s) == (Neo4jUnexpectedResponseException s2) = s == s2
+    (Neo4jParseException msg) == (Neo4jParseException msg2) = msg == msg2
+    _ == _ = False
 
 -- | Type for a connection
 data Connection = Connection {dbHostname :: Hostname, dbPort :: Port, manager :: HC.Manager}

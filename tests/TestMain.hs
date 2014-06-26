@@ -8,24 +8,14 @@ import qualified Data.HashMap.Lazy as M
 import qualified Data.Text as T
 
 import Control.Exception
-import Control.Monad
-import Data.Int
-import Data.List
-import Data.Maybe
-import Distribution.Simple.Utils
-import Distribution.Verbosity
-import Test.Framework
 import Test.Framework.TH
 import Test.Framework.Providers.HUnit
-import Test.Framework.Providers.QuickCheck2
+--import Test.Framework.Providers.QuickCheck2
 import Test.HUnit.Base hiding (Test)
-import Test.QuickCheck
-import qualified Data.ByteString.Lazy as B
-import qualified Test.HUnit as H
-import Network.HTTP.Conduit
+--import Test.QuickCheck
+--import qualified Test.HUnit as H
 
 import Database.Neo4j
-import qualified Network.HTTP.Conduit as HC
 
 (<>) :: String -> String -> String
 (<>) = mappend
@@ -36,26 +26,88 @@ getException action = handle (return . Just) $ do
     _ <- action
     return Nothing
 
-assertException :: (Exception e, Show e) => e -> IO a -> Assertion
+assertException :: Neo4jException -> IO a -> Assertion
 assertException exExc action = do
         resExc <- getException action
         checkExc resExc
     where --checkExc :: (Exception e, Show e) => Maybe e -> Assertion
-          checkExc Nothing = assertFailure noExcMsg
-          checkExc (Just (Neo4jHttpException (HC.FailedConnectionException2 "localhost" _ _ ))) = do
-            liftIO $ print $ fromException ee
-            assertEqual "" (show exExc) (show ee)
-          checkExc (Just e) = assertEqual "" (show exExc) (show e)
-          noExcMsg = "Expected exception " <> show exExc <> " but none raised"
+          checkExc Nothing = assertFailure $ "Expected exception " <> show exExc <> " but none raised"
+          checkExc (Just e) = assertEqual "" exExc e
     
 
 main :: IO ()
 main = $(defaultMainGenerator)
 
+-- | Dummy properties
+someProperties :: Properties
+someProperties = M.fromList ["hola" |: ("adeu" :: T.Text)]
+
+-- | Test connecting to a non-existing server
 case_NoConnection :: Assertion
-case_NoConnection = do
-     assertException expException $ withConnection "localhost" port $ do
-        n <- createNode $ M.fromList ["hola" |: ("adeu" :: T.Text)]
-        liftIO $ print n
-    where expException = Neo4jHttpException (HC.FailedConnectionException2 "localhost" port False $ toException TooManyRetries)
-          port = 77
+case_NoConnection = assertException expException $ withConnection "localhost" 77 $ do
+                                                        createNode someProperties
+    where expException = Neo4jHttpException "FailedConnectionException2 \"localhost\" 77 False connect: does\
+                                             \ not exist (Connection refused)"
+
+-- | Default Neo4j port
+port :: Port
+port = 7474
+
+-- | Default Neo4j host
+host :: Hostname
+host = "localhost"
+
+-- | Test get and create a node
+case_CreateGetDeleteNode :: Assertion
+case_CreateGetDeleteNode = withConnection host port $ do
+    n <- createNode someProperties
+    newN <- getNode n
+    liftIO $ assertEqual "" (Just n) newN
+    delRes <- deleteNode n
+    liftIO $ assertBool "Expected cleanup delete to be successful" delRes
+
+-- | Test delete and get a node
+case_CreateDeleteGetNode :: Assertion
+case_CreateDeleteGetNode = withConnection host port $ do
+    n <- createNode someProperties
+    delRes <- deleteNode n
+    liftIO $ assertBool "" delRes
+    newN <- getNode n
+    liftIO $ assertEqual "" Nothing newN
+
+-- | Test double delete
+case_DoubleDeleteNode :: Assertion
+case_DoubleDeleteNode = withConnection host port $ do
+    n <- createNode someProperties
+    delRes <- deleteNode n
+    liftIO $ assertBool "" delRes
+    newDelRes <- deleteNode n
+    liftIO $ assertBool "" newDelRes
+
+-- | Test get node by id
+case_GetNodeById :: Assertion
+case_GetNodeById = withConnection host port $ do
+    n <- createNode someProperties
+    newN <- getNodeById (nodeId n)
+    liftIO $ assertEqual "" (Just n) newN
+    delRes <- deleteNode n
+    liftIO $ assertBool "Expected cleanup delete to be successful" delRes
+
+-- | Test get node with unexisting id
+case_GetUnexistingNodeById :: Assertion
+case_GetUnexistingNodeById = withConnection host port $ do
+    newN <- getNodeById "unexistingnode"
+    liftIO $ assertEqual "" Nothing newN
+        
+-- | Test delete node by id
+case_DeleteNodeById :: Assertion
+case_DeleteNodeById = withConnection host port $ do
+    n <- createNode someProperties
+    delRes <- deleteNodeById (nodeId n)
+    liftIO $ assertBool "" delRes
+
+-- | Test delete unexisting node by id
+case_DeleteUnexistingNodeById :: Assertion
+case_DeleteUnexistingNodeById = withConnection host port $ do
+    delRes <- deleteNodeById "unexistingnode"
+    liftIO $ assertBool "" delRes
