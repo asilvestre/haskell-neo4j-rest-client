@@ -45,14 +45,14 @@ main = $(defaultMainGenerator)
 -- TODO: Is it possible to avoid so many type declarations for literals when constructing properties??
 -- | Dummy properties
 someProperties :: Properties
-someProperties = M.fromList ["text" |: ("mytext" :: T.Text),
-                             "textarray" |: ["a" :: T.Text, "", "adeu"],
+someProperties = M.fromList ["mytext" |: ("mytext" :: T.Text),
+                             "textarrayprop" |: ["a" :: T.Text, "", "adeu"],
                              "int" |: (-12 :: Int64),
                              "intarray" |: [1 :: Int64, 2],
                              "double" |: (-12.23 :: Double),
                              "doublearray" |: [0.1, (-12.23 :: Double)],
                              "bool" |: False,
-                             "boolarray" |: [False, True]
+                             "aboolproparray" |: [False, True]
                             ]
 
 -- | Default Neo4j port
@@ -273,9 +273,9 @@ myRelType = "MYREL"
 -- | Test get and create a relationship
 case_CreateGetDeleteRelationship :: Assertion
 case_CreateGetDeleteRelationship = withConnection host port $ do
-    nodeFrom <- createNode someProperties
+    nodeFrom <- createNode anotherProperties
     nodeTo <- createNode someOtherProperties
-    r <- createRelationship myRelType anotherProperties nodeFrom nodeTo
+    r <- createRelationship myRelType someProperties nodeFrom nodeTo
     newN <- getRelationship r
     liftIO $ assertEqual "" (Just r) newN
     deleteRelationship r

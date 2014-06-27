@@ -105,7 +105,7 @@ httpRetrieveValue conn path = do
 
 -- | Launch a DELETE request, this will raise an exception if 204 is not received
 --   Optionally, if passing acceptConflict as True, 409 is accepted too, receiveing 409 makes the function return False
---   If receive 404, we will just return true, though wasn't existing already the result is the same
+--   If we receive 404, we will just return true, though wasn't existing already the result is the same
 httpDelete :: Connection -> S.ByteString -> Bool -> ResourceT IO Bool
 httpDelete c pth acceptConflict = do
             res <- httpReq c HT.methodDelete pth "" (\s -> s == HT.status204 || s == HT.status404 ||
