@@ -18,7 +18,7 @@ cabal-version:       >=1.8
 Test-Suite test-haskell-neo4j-rest-client
      Type:           exitcode-stdio-1.0
      Hs-Source-Dirs: src, tests
-     Main-is:        TestMain.hs
+     Main-is:        IntegrationTests.hs
      Build-Depends:  base ==4.6.*,
                      bytestring ==0.10.*,
                      test-framework ==0.8.*,
