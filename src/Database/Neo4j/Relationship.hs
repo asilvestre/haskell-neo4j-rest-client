@@ -16,6 +16,8 @@ import Database.Neo4j.Http
 relationshipAPI :: S.ByteString
 relationshipAPI = "/db/data/relationship"
 
+-- TODO: When having properties with empty arrays, make a transaction that first creates the array with one element
+--       and then with an empty array, now creating an empty array property will raise a Neo4j exception
 -- | Create a new relationship with a type and a set of properties
 createRelationship :: RelationshipType -> Properties -> Node -> Node -> Neo4j Relationship
 createRelationship t props nodefrom nodeto = Neo4j $ \conn -> httpCreate conn reqPath reqBody

@@ -38,35 +38,35 @@ data PropertyValue = ValueProperty Val | ArrayProperty [Val] deriving (Show, Eq)
 
 -- | This class allows easy construction of property value types from literals
 class PropertyValueConstructor a where
-    propvalueconstr :: a -> PropertyValue
+    newval :: a -> PropertyValue
 
 instance PropertyValueConstructor Int64 where
-    propvalueconstr v = ValueProperty $ IntVal v
+    newval v = ValueProperty $ IntVal v
 
 instance PropertyValueConstructor Bool where
-    propvalueconstr v = ValueProperty $ BoolVal v
+    newval v = ValueProperty $ BoolVal v
 
 instance PropertyValueConstructor T.Text where
-    propvalueconstr v = ValueProperty $ TextVal v
+    newval v = ValueProperty $ TextVal v
 
 instance PropertyValueConstructor Double where
-    propvalueconstr v = ValueProperty $ DoubleVal v
+    newval v = ValueProperty $ DoubleVal v
 
 instance PropertyValueConstructor [Int64] where
-    propvalueconstr v = ArrayProperty $ map IntVal v
+    newval v = ArrayProperty $ map IntVal v
 
 instance PropertyValueConstructor [Bool] where
-    propvalueconstr v = ArrayProperty $ map BoolVal v
+    newval v = ArrayProperty $ map BoolVal v
 
 instance PropertyValueConstructor [T.Text] where
-    propvalueconstr v = ArrayProperty $ map TextVal v
+    newval v = ArrayProperty $ map TextVal v
 
 instance PropertyValueConstructor [Double] where
-    propvalueconstr v = ArrayProperty $ map DoubleVal v
+    newval v = ArrayProperty $ map DoubleVal v
 
 -- | This operator allows easy construction of property value types from literals
 (|:) :: PropertyValueConstructor a => T.Text -> a -> (T.Text, PropertyValue)
-name |: v = (name, propvalueconstr v)
+name |: v = (name, newval v)
 
 -- | Specifying how to convert property single values to JSON
 instance J.ToJSON Val where
@@ -143,8 +143,8 @@ relPath = urlPath . relLocation
 data Relationship = Relationship {relLocation :: T.Text,
                                   relType :: RelationshipType,
                                   relProperties :: Properties,
-                                  relFrom :: Node,
-                                  relTo :: Node} deriving (Show)
+                                  relFrom :: T.Text,
+                                  relTo :: T.Text} deriving (Show, Eq)
 
 -- | JSON to Relationship
 instance J.FromJSON Relationship where
@@ -163,14 +163,8 @@ type Label = T.Text
 -- | Exceptions this library can raise
 data Neo4jException = Neo4jHttpException String |
                       Neo4jUnexpectedResponseException HT.Status |
-                      Neo4jParseException String deriving (Show, Typeable)
+                      Neo4jParseException String deriving (Show, Typeable, Eq)
 instance Exception Neo4jException
-
-instance Eq Neo4jException where
-    (Neo4jHttpException msg) == (Neo4jHttpException msg2) = msg == msg2
-    (Neo4jUnexpectedResponseException s) == (Neo4jUnexpectedResponseException s2) = s == s2
-    (Neo4jParseException msg) == (Neo4jParseException msg2) = msg == msg2
-    _ == _ = False
 
 -- | Type for a connection
 data Connection = Connection {dbHostname :: Hostname, dbPort :: Port, manager :: HC.Manager}

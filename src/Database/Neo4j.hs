@@ -20,7 +20,7 @@ module Database.Neo4j (
     -- * Main monadic type to handle sequences of commands to Neo4j
     Neo4j(..),
     -- * Constructing and managing node/relationship properties
-    Val(..), PropertyValue(..), (|:), Properties, emptyProperties, getProperties, getProperty, setProperties,
+    Val(..), PropertyValue(..), newval, (|:), Properties, emptyProperties, getProperties, getProperty, setProperties,
         setProperty, deleteProperties, deleteProperty, 
     -- * Managing nodes
     Node(..), createNode, getNodeById, getNode, deleteNodeById, deleteNode, nodeId,

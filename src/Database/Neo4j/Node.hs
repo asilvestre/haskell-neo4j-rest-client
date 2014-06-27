@@ -17,6 +17,8 @@ nodeId :: Node -> S.ByteString
 nodeId n = S.drop (pathLength + 1) (nodePath n)
     where pathLength = S.length nodeAPI
 
+-- TODO: When having properties with empty arrays, make a transaction that first creates the array with one element
+--       and then with an empty array, now creating an empty array property will raise a Neo4j exception
 -- | Create a new node with a set of properties
 createNode :: Properties -> Neo4j Node
 createNode props = Neo4j $ \conn -> httpCreate conn nodeAPI (J.encode props)
