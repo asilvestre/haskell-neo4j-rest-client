@@ -3,11 +3,14 @@
 module Database.Neo4j.Relationship where
 
 
+import Control.Exception.Lifted (throw, catch)
 import Data.Aeson ((.=))
+
 import qualified Data.Aeson as J
 import qualified Data.ByteString as S
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Network.HTTP.Types as HT
 
 import Database.Neo4j.Types
 import Database.Neo4j.Http
@@ -16,40 +19,50 @@ import Database.Neo4j.Http
 relationshipAPI :: S.ByteString
 relationshipAPI = "/db/data/relationship"
 
--- TODO: When having properties with empty arrays, make a transaction that first creates the array with one element
---       and then with an empty array, now creating an empty array property will raise a Neo4j exception
+-- | Get the ID of a relationship
+relId :: Relationship -> S.ByteString
+relId n = S.drop (pathLength + 1) (relPath n)
+    where pathLength = S.length relationshipAPI
+
+class RelIdentifier a where
+    getRelPath :: a -> S.ByteString
+
+instance RelIdentifier Relationship where
+    getRelPath = relPath
+
+instance RelIdentifier S.ByteString where
+    getRelPath t = relationshipAPI <> "/" <> t
+
 -- | Create a new relationship with a type and a set of properties
 createRelationship :: RelationshipType -> Properties -> Node -> Node -> Neo4j Relationship
-createRelationship t props nodefrom nodeto = Neo4j $ \conn -> httpCreate conn reqPath reqBody
+createRelationship t props nodefrom nodeto = Neo4j $ \conn -> do
+            res <- httpCreate404Explained conn reqPath reqBody
+            case res of
+                        Right rel -> return rel
+                        Left expl -> throw $ Neo4jNoEntityException (
+                                nodePath  $ if expl == "StartNodeNotFoundException" then nodefrom else nodeto)
     where reqPath = nodePath nodefrom <> "/relationships"
-          reqBody = J.encode $ J.object ["to" .= nodeLocation nodeto, "type" .= t, "data" .= J.toJSON props]
-
--- | Get relationship by ID
-getRelationshipById :: S.ByteString -> Neo4j (Maybe Relationship)
-getRelationshipById idRel = Neo4j $ \conn -> httpRetrieve conn (relationshipAPI <> "/" <> idRel)
+          reqBody = J.encode $ J.object ["to" .= runNodeLocation (nodeLocation nodeto), "type" .= t,
+                                         "data" .= J.toJSON props]
 
 -- | Refresh a relationship entity with the contents in the DB
-getRelationship :: Relationship -> Neo4j (Maybe Relationship)
-getRelationship rel = Neo4j $ \conn -> httpRetrieve conn (relPath rel)
-
--- | Delete a relationship by ID
-deleteRelationshipById :: S.ByteString -> Neo4j ()
-deleteRelationshipById idRel = Neo4j $ \conn -> do
-            _ <- httpDelete conn (relationshipAPI <> "/" <> idRel) False
-            return ()
+getRelationship :: RelIdentifier a => a -> Neo4j (Maybe Relationship)
+getRelationship rel = Neo4j $ \conn -> httpRetrieve conn (getRelPath rel)
 
 -- | Delete a relationship
-deleteRelationship :: Relationship -> Neo4j ()
-deleteRelationship rel = Neo4j $ \conn -> do
-            _ <- httpDelete conn (relPath rel) False
-            return ()
+deleteRelationship :: RelIdentifier a => a -> Neo4j ()
+deleteRelationship rel = Neo4j $ \conn -> httpDelete conn (getRelPath rel)
 
 -- | Get all relationships for a node, if the node has disappeared it will raise an exception
 getRelationships :: Node -> Direction -> [Label] -> Neo4j [Relationship]
 getRelationships n dir lblFilter = Neo4j $ \conn -> 
-            httpRetrieveSure conn (nodePath n <> "/relationships/" <> dirStr dir <> filterStr lblFilter)
+            httpRetrieveSure conn (nodePath n <> "/relationships/" <> dirStr dir <> filterStr lblFilter) `catch` procEx
     where dirStr Outgoing = "out"
           dirStr Incoming = "in"
           dirStr Any = "all"
           filterStr [] = ""
           filterStr f = "/" <> TE.encodeUtf8 (T.intercalate "%26" f)
+          procEx exc@(Neo4jUnexpectedResponseException s)
+                  | s == HT.status404 = throw (Neo4jNoEntityException $ nodePath n)
+                  | otherwise = throw exc
+          procEx exc = throw exc

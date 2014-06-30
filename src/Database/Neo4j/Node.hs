@@ -2,8 +2,11 @@
 
 module Database.Neo4j.Node where
 
+import Control.Exception.Lifted (throw, catch)
+
 import qualified Data.Aeson as J
 import qualified Data.ByteString as S
+import qualified Network.HTTP.Types as HT
 
 import Database.Neo4j.Types
 import Database.Neo4j.Http
@@ -17,24 +20,31 @@ nodeId :: Node -> S.ByteString
 nodeId n = S.drop (pathLength + 1) (nodePath n)
     where pathLength = S.length nodeAPI
 
--- TODO: When having properties with empty arrays, make a transaction that first creates the array with one element
---       and then with an empty array, now creating an empty array property will raise a Neo4j exception
+class NodeIdentifier a where
+    getNodePath :: a -> S.ByteString
+
+instance NodeIdentifier Node where
+    getNodePath = nodePath
+
+instance NodeIdentifier S.ByteString where
+    getNodePath t = nodeAPI <> "/" <> t
+
+instance NodeIdentifier NodeLocation where
+    getNodePath = urlPath . runNodeLocation
+
 -- | Create a new node with a set of properties
 createNode :: Properties -> Neo4j Node
 createNode props = Neo4j $ \conn -> httpCreate conn nodeAPI (J.encode props)
 
--- | Get a node by ID
-getNodeById :: S.ByteString -> Neo4j (Maybe Node)
-getNodeById idNode = Neo4j $ \conn -> httpRetrieve conn (nodeAPI <> "/" <> idNode)
-
 -- | Refresh a node entity with the contents in the DB
-getNode :: Node -> Neo4j (Maybe Node)
-getNode n = Neo4j $ \conn -> httpRetrieve conn (nodePath n)
+getNode :: NodeIdentifier a => a -> Neo4j (Maybe Node)
+getNode n = Neo4j $ \conn -> httpRetrieve conn (getNodePath n)
 
--- | Delete a node by ID, the deletion will fail if the node is not orphan, if that happens the result will be False
-deleteNodeById :: S.ByteString -> Neo4j Bool
-deleteNodeById idNode = Neo4j $ \conn -> httpDelete conn (nodeAPI <> "/" <> idNode) True
+-- | Delete a node, if the node has relationships it will raise a Neo4jNonOrphanNodeDeletion
+deleteNode :: NodeIdentifier a => a -> Neo4j () 
+deleteNode n = Neo4j $ \conn -> httpDelete conn (getNodePath n) `catch` processConflict
+    where processConflict e@(Neo4jUnexpectedResponseException s) 
+            | s == HT.status409 = throw (Neo4jNonOrphanNodeDeletionException $ getNodePath n)
+            | otherwise = throw e
+          processConflict e = throw e
 
--- | Delete a node, the deletion will fail if the node is not orphan, if that happens the result will be False
-deleteNode :: Node -> Neo4j Bool
-deleteNode n = Neo4j $ \conn -> httpDelete conn (nodePath n) True

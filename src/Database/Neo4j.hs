@@ -23,10 +23,10 @@ module Database.Neo4j (
     Val(..), PropertyValue(..), newval, (|:), Properties, emptyProperties, getProperties, getProperty, setProperties,
         setProperty, deleteProperties, deleteProperty, 
     -- * Managing nodes
-    Node(..), createNode, getNodeById, getNode, deleteNodeById, deleteNode, nodeId,
+    Node(..), createNode, getNode, deleteNode, nodeId, nodePath,
     -- * Managing relationships
-    Relationship(..), Direction(..), RelationshipType, createRelationship, getRelationshipById, getRelationship,
-        deleteRelationshipById, deleteRelationship, getRelationships,
+    Relationship(..), Direction(..), RelationshipType, createRelationship, getRelationship, deleteRelationship,
+        getRelationships, relId, relPath,
     -- * Managing labels and getting nodes by label
     Label, allLabels, getLabels, getNodesByLabelAndProperty, addLabels, changeLabels, removeLabel, removeLabels,
     -- * Exceptions

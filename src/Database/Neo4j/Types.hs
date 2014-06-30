@@ -108,23 +108,27 @@ urlPath url = TE.encodeUtf8 $ fromMaybe url $ T.stripPrefix "http://" url >>= re
 
 -- | Class for top-level Neo4j entities (nodes and relationships) useful to have generic property management code
 class Entity a where
+    entityPath :: a -> S.ByteString
     propertyPath :: a -> S.ByteString
     getEntityProperties :: a -> Properties
     setEntityProperties :: a -> Properties -> a
     
 -- | Get the path for a node entity without host and port
 nodePath :: Node -> S.ByteString
-nodePath = urlPath . nodeLocation
+nodePath = urlPath . runNodeLocation . nodeLocation
+
+newtype NodeLocation = NodeLocation {runNodeLocation :: T.Text} deriving (Show, Eq)
 
 -- | Representation of a Neo4j node, has a location URI and a set of properties
-data Node = Node {nodeLocation :: T.Text, nodeProperties :: Properties} deriving (Show, Eq)
+data Node = Node {nodeLocation :: NodeLocation, nodeProperties :: Properties} deriving (Show, Eq)
 
 -- | JSON to Node
 instance J.FromJSON Node where
-    parseJSON (J.Object v) = Node <$> (v .: "self") <*> (v .: "data" >>= J.parseJSON)
+    parseJSON (J.Object v) = Node <$> (NodeLocation <$> (v .: "self")) <*> (v .: "data" >>= J.parseJSON)
     parseJSON _ = mzero
 
 instance Entity Node where
+    entityPath = nodePath
     propertyPath n = nodePath n <> "/properties"
     getEntityProperties = nodeProperties
     setEntityProperties n props = n {nodeProperties = props}
@@ -143,16 +147,17 @@ relPath = urlPath . relLocation
 data Relationship = Relationship {relLocation :: T.Text,
                                   relType :: RelationshipType,
                                   relProperties :: Properties,
-                                  relFrom :: T.Text,
-                                  relTo :: T.Text} deriving (Show, Eq)
+                                  relFrom :: NodeLocation,
+                                  relTo :: NodeLocation} deriving (Show, Eq)
 
 -- | JSON to Relationship
 instance J.FromJSON Relationship where
     parseJSON (J.Object v) = Relationship <$> v .: "self" <*> v .: "type" <*> (v .: "data" >>= J.parseJSON) <*>
-                                v .: "start" <*> v .: "end"
+                                (NodeLocation <$> v .: "start") <*> (NodeLocation <$> v .: "end")
     parseJSON _ = mzero
 
 instance Entity Relationship where
+    entityPath = relPath
     propertyPath r = relPath r <> "/properties"
     getEntityProperties = relProperties
     setEntityProperties r props = r {relProperties = props}
@@ -162,6 +167,8 @@ type Label = T.Text
 
 -- | Exceptions this library can raise
 data Neo4jException = Neo4jHttpException String |
+                      Neo4jNonOrphanNodeDeletionException S.ByteString |
+                      Neo4jNoEntityException S.ByteString |
                       Neo4jUnexpectedResponseException HT.Status |
                       Neo4jParseException String deriving (Show, Typeable, Eq)
 instance Exception Neo4jException

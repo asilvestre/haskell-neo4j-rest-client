@@ -3,13 +3,19 @@
 module Database.Neo4j.Http where
 
 import Control.Exception.Base (Exception, throw, catch, toException)
+import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Resource (runResourceT, ResourceT)
 import Data.Default (def)
+import Data.Maybe (fromMaybe)
+
+import Data.Aeson ((.:?))
+import Data.Aeson.Types (parseMaybe)
 
 import qualified Data.Aeson as J
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
+import qualified Data.Text as T
 import qualified Network.HTTP.Conduit as HC
 import qualified Network.HTTP.Types as HT
 
@@ -49,6 +55,12 @@ httpReq (Connection h p m) method path body statusCheck = do
     where wrapException :: HC.HttpException -> a
           wrapException = throw . Neo4jHttpException . show
 
+-- | Extracts the exception description from a HTTP Neo4j response if the status code matches otherwise Nothing
+extractException :: HC.Response L.ByteString -> T.Text
+extractException resp = fromMaybe "" $ join $ do
+                resobj <- J.decode $ HC.responseBody resp
+                flip parseMaybe resobj $ \obj -> obj .:? "exception"
+
 -- | Launch a POST request, this will raise an exception if 201 or 204 is not received
 httpCreate :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString -> ResourceT IO a
 httpCreate conn path body = do
@@ -57,6 +69,17 @@ httpCreate conn path body = do
             return $ case resBody of
                         Right entity -> entity
                         Left e -> throw $ Neo4jParseException ("Error parsing created entity: " ++ e)
+
+-- | Launch a POST request, this will raise an exception if 201 or 204 is not received
+--   With 404 will return a left with the explanation
+httpCreate404Explained :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString -> ResourceT IO (Either T.Text a)
+httpCreate404Explained conn path body = do
+            res <- httpReq conn HT.methodPost path body (\s -> s `elem` [HT.status201, HT.status404])
+            let status = HC.responseStatus res
+            return $ if status /= HT.status404 then parseBody res else Left $ extractException res
+    where parseBody resp = case J.eitherDecode $ HC.responseBody resp of
+                            Right entity -> Right entity
+                            Left e -> throw $ Neo4jParseException ("Error parsing created entity: " ++ e)
 
 -- | Launch a POST request that doesn't expect response body, this will raise an exception if 204 is not received
 httpCreate_ :: Connection -> S.ByteString -> L.ByteString -> ResourceT IO ()
@@ -87,35 +110,52 @@ httpRetrieveSure conn path = do
                         Left e -> throw $ Neo4jParseException ("Error parsing received entity: " ++ e)
 
 -- | Launch a GET request, this will raise an exception if 200 or 404 is not received
+--   With 404 will return a left with the explanation
 --   Unlike httpRetrieve this method can parse any JSON value even if it's non-top (arrays and objects)
-httpRetrieveValue :: J.FromJSON a => Connection -> S.ByteString -> ResourceT IO (Maybe a)
+httpRetrieveValue :: J.FromJSON a => Connection -> S.ByteString -> ResourceT IO (Either T.Text a)
 httpRetrieveValue conn path = do
             res <- httpReq conn HT.methodGet path "" (\s -> s == HT.status200 || s == HT.status404)
             let status = HC.responseStatus res
-            let body = if status == HT.status200
+            return $ if status == HT.status200 then parseBody res else Left $ extractException res
                          -- Ugly hack to parse values that aren't top level JSON values (objects and arrays)
-                         then Just $ J.eitherDecode $ "[" `L.append` HC.responseBody res `L.append` "]" 
-                         else Nothing
-            return $ case body of
-                        Just (Right (entity:[])) -> Just entity
-                        Just (Right _) -> throw $ Neo4jParseException "Error parsing received entity"
-                        Just (Left e) -> throw $ Neo4jParseException ("Error parsing received entity: " ++ e)
-                        Nothing -> Nothing
-
+    where parseBody resp = case  J.eitherDecode $ "[" `L.append` HC.responseBody resp `L.append` "]" of
+                                Right (entity:[]) -> Right entity
+                                Right _ -> throw $ Neo4jParseException "Error parsing received entity"
+                                Left e -> throw $ Neo4jParseException ("Error parsing received entity: " ++ e)
+            
 
 -- | Launch a DELETE request, this will raise an exception if 204 is not received
---   Optionally, if passing acceptConflict as True, 409 is accepted too, receiveing 409 makes the function return False
 --   If we receive 404, we will just return true, though wasn't existing already the result is the same
-httpDelete :: Connection -> S.ByteString -> Bool -> ResourceT IO Bool
-httpDelete c pth acceptConflict = do
-            res <- httpReq c HT.methodDelete pth "" (\s -> s == HT.status204 || s == HT.status404 ||
-                                                     (acceptConflict && s == HT.status409))
-            let status = HC.responseStatus res
-            return $ status /= HT.status409
+httpDelete :: Connection -> S.ByteString -> ResourceT IO () 
+httpDelete c pth = do
+            _ <- httpReq c HT.methodDelete pth "" (\s -> s == HT.status204 || s == HT.status404)
+            return ()
 
+-- | Launch a DELETE request, this will raise an exception if 204 is not received
+--   We don't accept 404
+httpDeleteNo404 :: Connection -> S.ByteString -> ResourceT IO () 
+httpDeleteNo404 c pth = do
+            _ <- httpReq c HT.methodDelete pth "" (==HT.status204)
+            return ()
+
+-- | Launch a DELETE request, this will raise an exception if 204 is not received
+--   If we receive 404, we will return the server explanation
+httpDelete404Explained :: Connection -> S.ByteString -> ResourceT IO (Either T.Text ())
+httpDelete404Explained c pth = do
+            res <- httpReq c HT.methodDelete pth "" (\s -> s == HT.status204 || s == HT.status404)
+            let status = HC.responseStatus res
+            return $ if status /= HT.status404 then Right () else Left $ extractException res
 
 -- | Launch a PUT request, this will raise an exception if 200 or 204 is not received
 httpModify :: Connection -> S.ByteString -> L.ByteString -> ResourceT IO ()
 httpModify c path body = do
             _ <- httpReq c HT.methodPut path body (\s -> s == HT.status200 || s == HT.status204)
             return ()
+
+-- | Launch a PUT request, this will raise an exception if 200 or 204 is not received
+--   If we receive 404, we will return the server explanation
+httpModify404Explained :: Connection -> S.ByteString -> L.ByteString -> ResourceT IO (Either T.Text ())
+httpModify404Explained c path body = do
+            res <- httpReq c HT.methodPut path body (\s -> s == HT.status200 || s == HT.status204 || s == HT.status404)
+            let status = HC.responseStatus res
+            return $ if status /= HT.status404 then Right () else Left $ extractException res

@@ -42,11 +42,11 @@ changeLabels lbls n = Neo4j $ \conn -> httpModify conn (nodePath n <> "/labels")
 -- | Remove a label for a node
 removeLabel :: Label -> Node -> Neo4j ()
 removeLabel lbl n = Neo4j $ \conn -> do
-        _ <- httpDelete conn (nodePath n <> "/labels/" <> TE.encodeUtf8 lbl) False
+        _ <- httpDelete conn (nodePath n <> "/labels/" <> TE.encodeUtf8 lbl)
         return ()
 
 -- | Remove all labels for a node
 removeLabels :: Node -> Neo4j ()
 removeLabels n = Neo4j $ \conn -> do
-        _ <- httpDelete conn (nodePath n <> "/labels") False
+        _ <- httpDelete conn (nodePath n <> "/labels")
         return ()
