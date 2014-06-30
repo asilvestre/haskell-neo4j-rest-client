@@ -71,12 +71,12 @@ httpCreate conn path body = do
                         Left e -> throw $ Neo4jParseException ("Error parsing created entity: " ++ e)
 
 -- | Launch a POST request, this will raise an exception if 201 or 204 is not received
---   With 404 will return a left with the explanation
-httpCreate404Explained :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString -> ResourceT IO (Either T.Text a)
-httpCreate404Explained conn path body = do
-            res <- httpReq conn HT.methodPost path body (\s -> s `elem` [HT.status201, HT.status404])
+--   With 404 or 400 will return a left with the explanation
+httpCreate4XXExplained :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString -> ResourceT IO (Either T.Text a)
+httpCreate4XXExplained conn path body = do
+            res <- httpReq conn HT.methodPost path body (\s -> s `elem` [HT.status201, HT.status404, HT.status400])
             let status = HC.responseStatus res
-            return $ if status /= HT.status404 then parseBody res else Left $ extractException res
+            return $ if status == HT.status201 then parseBody res else Left $ extractException res
     where parseBody resp = case J.eitherDecode $ HC.responseBody resp of
                             Right entity -> Right entity
                             Left e -> throw $ Neo4jParseException ("Error parsing created entity: " ++ e)

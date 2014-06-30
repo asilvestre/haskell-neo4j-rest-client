@@ -36,14 +36,17 @@ instance RelIdentifier S.ByteString where
 -- | Create a new relationship with a type and a set of properties
 createRelationship :: RelationshipType -> Properties -> Node -> Node -> Neo4j Relationship
 createRelationship t props nodefrom nodeto = Neo4j $ \conn -> do
-            res <- httpCreate404Explained conn reqPath reqBody
+            res <- httpCreate4XXExplained conn reqPath reqBody
             case res of
                         Right rel -> return rel
-                        Left expl -> throw $ Neo4jNoEntityException (
-                                nodePath  $ if expl == "StartNodeNotFoundException" then nodefrom else nodeto)
+                        Left expl -> wrapExc expl
     where reqPath = nodePath nodefrom <> "/relationships"
           reqBody = J.encode $ J.object ["to" .= runNodeLocation (nodeLocation nodeto), "type" .= t,
                                          "data" .= J.toJSON props]
+          wrapExc msg
+            | msg == "StartNodeNotFoundException" = throw (Neo4jNoEntityException $ nodePath nodefrom)
+            | msg == "EndNodeNotFoundException" = throw (Neo4jNoEntityException $ nodePath nodeto)
+            | otherwise = throw (Neo4jHttpException $ T.unpack msg)
 
 -- | Refresh a relationship entity with the contents in the DB
 getRelationship :: RelIdentifier a => a -> Neo4j (Maybe Relationship)
