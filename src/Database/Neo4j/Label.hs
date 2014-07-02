@@ -3,6 +3,7 @@
 module Database.Neo4j.Label where
 
 import Network.HTTP.Base (urlEncodeVars)
+import Control.Exception.Lifted (catch)
 
 import qualified Data.Aeson as J
 import qualified Data.ByteString.Char8 as S
@@ -13,13 +14,15 @@ import qualified Data.Text.Encoding as TE
 import Database.Neo4j.Types
 import Database.Neo4j.Http
 
+
 -- | Get all labels in the DB
 allLabels :: Neo4j [Label]
 allLabels = Neo4j $ \conn -> httpRetrieveSure conn "/db/data/labels"
 
 -- | Retrieve all labels for a node, if the node doesn't exist already it will raise an exception
+-- | Raises Neo4jNoEntityException if the node doesn't exist
 getLabels :: Node -> Neo4j [Label]
-getLabels n = Neo4j $ \conn -> httpRetrieveSure conn (nodePath n <> "/labels")
+getLabels n = Neo4j $ \conn -> httpRetrieveSure conn (nodePath n <> "/labels") `catch` proc404Exc n
 
 -- | Get all nodes using a label and a property
 getNodesByLabelAndProperty :: Label -> Maybe (T.Text, PropertyValue) -> Neo4j [Node]
@@ -30,23 +33,27 @@ getNodesByLabelAndProperty lbl prop = Neo4j $ \conn ->
           lbsToStr = S.unpack . L.toStrict
 
 -- | Add labels to a node
+-- | Raises Neo4jNoEntityException if the node doesn't exist
 addLabels :: [Label] -> Node -> Neo4j ()
-addLabels lbls n = Neo4j $ \conn -> do
+addLabels lbls n = Neo4j $ \conn -> (do
         httpCreate_ conn (nodePath n <> "/labels") (J.encode lbls) 
-        return ()
+        return ()) `catch` proc404Exc n
 
 -- | Change node labels
+-- | Raises Neo4jNoEntityException if the node doesn't exist
 changeLabels :: [Label] -> Node -> Neo4j ()
-changeLabels lbls n = Neo4j $ \conn -> httpModify conn (nodePath n <> "/labels") (J.encode lbls) 
+changeLabels lbls n = Neo4j $ \conn -> httpModify conn (nodePath n <> "/labels") (J.encode lbls) `catch` proc404Exc n
 
 -- | Remove a label for a node
+-- | Raises Neo4jNoEntityException if the node doesn't exist
 removeLabel :: Label -> Node -> Neo4j ()
-removeLabel lbl n = Neo4j $ \conn -> do
-        _ <- httpDelete conn (nodePath n <> "/labels/" <> TE.encodeUtf8 lbl)
-        return ()
+removeLabel lbl n = Neo4j $ \conn -> (do
+        _ <- httpDeleteNo404 conn (nodePath n <> "/labels/" <> TE.encodeUtf8 lbl)
+        return ()) `catch` proc404Exc n
 
 -- | Remove all labels for a node
+-- | Raises Neo4jNoEntityException if the node doesn't exist
 removeLabels :: Node -> Neo4j ()
-removeLabels n = Neo4j $ \conn -> do
-        _ <- httpDelete conn (nodePath n <> "/labels")
-        return ()
+removeLabels n = Neo4j $ \conn -> (do
+        _ <- httpDeleteNo404 conn (nodePath n <> "/labels")
+        return ()) `catch` proc404Exc n

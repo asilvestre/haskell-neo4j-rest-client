@@ -159,3 +159,11 @@ httpModify404Explained c path body = do
             res <- httpReq c HT.methodPut path body (\s -> s == HT.status200 || s == HT.status204 || s == HT.status404)
             let status = HC.responseStatus res
             return $ if status /= HT.status404 then Right () else Left $ extractException res
+
+-- | Wrap 404 exception into Neo4jNoEntity exceptions
+proc404Exc :: Entity e => e -> Neo4jException -> a
+proc404Exc e exc@(Neo4jUnexpectedResponseException s)
+        | s == HT.status404 = throw (Neo4jNoEntityException $ entityPath e)
+        | otherwise = throw exc
+proc404Exc _ exc = throw exc
+

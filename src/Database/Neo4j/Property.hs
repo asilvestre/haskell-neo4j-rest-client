@@ -8,18 +8,10 @@ import qualified Data.Aeson as J
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
-import qualified Network.HTTP.Types as HT
 
 import Database.Neo4j.Types
 import Database.Neo4j.Http
 
-
--- | Wrap 404 exception into Neo4jNoEntity exceptions
-proc404Exc :: Entity e => e -> Neo4jException -> a
-proc404Exc e exc@(Neo4jUnexpectedResponseException s)
-        | s == HT.status404 = throw (Neo4jNoEntityException $ entityPath e)
-        | otherwise = throw exc
-proc404Exc _ exc = throw exc
 
 -- | Retrieve relationship/node properties from the DB, if the entity is not present it will raise an exception
 --   If the entity doesn't exist it will raise a Neo4jNoEntity exception

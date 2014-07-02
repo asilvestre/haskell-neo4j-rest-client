@@ -57,15 +57,15 @@ deleteRelationship :: RelIdentifier a => a -> Neo4j ()
 deleteRelationship rel = Neo4j $ \conn -> httpDelete conn (getRelPath rel)
 
 -- | Get all relationships for a node, if the node has disappeared it will raise an exception
-getRelationships :: Node -> Direction -> [Label] -> Neo4j [Relationship]
-getRelationships n dir lblFilter = Neo4j $ \conn -> 
-            httpRetrieveSure conn (nodePath n <> "/relationships/" <> dirStr dir <> filterStr lblFilter) `catch` procEx
+getRelationships :: Node -> Direction -> [RelationshipType] -> Neo4j [Relationship]
+getRelationships n dir types = Neo4j $ \conn -> 
+            httpRetrieveSure conn (nodePath n <> "/relationships/" <> dirStr dir <> filterStr types) `catch` procExc
     where dirStr Outgoing = "out"
           dirStr Incoming = "in"
           dirStr Any = "all"
           filterStr [] = ""
           filterStr f = "/" <> TE.encodeUtf8 (T.intercalate "%26" f)
-          procEx exc@(Neo4jUnexpectedResponseException s)
+          procExc exc@(Neo4jUnexpectedResponseException s)
                   | s == HT.status404 = throw (Neo4jNoEntityException $ nodePath n)
                   | otherwise = throw exc
-          procEx exc = throw exc
+          procExc exc = throw exc

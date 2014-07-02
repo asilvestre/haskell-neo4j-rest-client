@@ -613,13 +613,195 @@ case_GetNodeRelationshipsMultiple :: Assertion
 case_GetNodeRelationshipsMultiple = withConnection host port $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         r2 <- createRelationship myRelType someOtherProperties nodeTo nodeFrom
-        -- test getting relationships for the origin node
         rsAny <- getRelationships nodeFrom Any []
         neo4jBool (r `elem` rsAny)
         neo4jBool (r2 `elem` rsAny)
+        neo4jEqual 2 (length rsAny)
         rsOutgoing <- getRelationships nodeFrom Outgoing []
         neo4jEqual [r] rsOutgoing
         rsIncoming <- getRelationships nodeFrom Incoming []
         neo4jEqual [r2] rsIncoming
         deleteRelationship r2
         teardownRelTests nodeFrom nodeTo r
+
+-- | Get relationships for a node with a type filter
+case_GetNodeRelationshipsWithType :: Assertion
+case_GetNodeRelationshipsWithType = withConnection host port $ do
+        (nodeFrom, nodeTo, r) <- setupRelTests
+        rsAny <- getRelationships nodeFrom Any [myRelType]
+        neo4jEqual [r] rsAny
+        teardownRelTests nodeFrom nodeTo r
+
+-- | Get relationships for a node with an unexisting type filter
+case_GetNodeRelationshipsWithUnexistingType :: Assertion
+case_GetNodeRelationshipsWithUnexistingType = withConnection host port $ do
+        (nodeFrom, nodeTo, r) <- setupRelTests
+        rsAny <- getRelationships nodeFrom Any ["notype"]
+        neo4jEqual [] rsAny
+        teardownRelTests nodeFrom nodeTo r
+
+-- | Get relationships for a node with a type filter with multiple elements
+case_GetNodeRelationshipsWithTypes :: Assertion
+case_GetNodeRelationshipsWithTypes = withConnection host port $ do
+        (nodeFrom, nodeTo, r) <- setupRelTests
+        -- Create another relationship with another type
+        r2 <- createRelationship type2 anotherProperties nodeTo nodeFrom
+        rsAny <- getRelationships nodeFrom Any [myRelType, type2, "notype"]
+        neo4jBool (r `elem` rsAny)
+        neo4jBool (r2 `elem` rsAny)
+        neo4jEqual 2 (length rsAny)
+        deleteRelationship r2
+        teardownRelTests nodeFrom nodeTo r
+    where type2 = "reltype2"
+
+-- | Get all labels in the DB (We don't have control of all the labels the DB has)
+case_getLabels :: Assertion
+case_getLabels = withConnection host port $ do
+        n <- createNode someProperties
+        addLabels [lbl] n
+        lbls <- allLabels
+        neo4jBool $ lbl `elem` lbls
+        deleteNode n
+    where lbl = "label1"
+
+-- | Get labels for a node it doesn't have any
+case_getNodeLabelsWithNone :: Assertion
+case_getNodeLabelsWithNone = withConnection host port $ do
+    n <- createNode someProperties
+    lbls <- getLabels n
+    neo4jEqual [] lbls
+    deleteNode n
+
+-- | Get labels for an unexisting node
+case_getUnexistingNodeLabels :: Assertion
+case_getUnexistingNodeLabels = do
+    n <- withConnection host port $ createNode someProperties
+    let expException = Neo4jNoEntityException $ nodePath n
+    assertException expException $ withConnection host port $ do
+        deleteNode n
+        _ <- getLabels n
+        return ()
+
+-- | Add labels to a node and get them
+case_getAddAndGetNodeLabels :: Assertion
+case_getAddAndGetNodeLabels = withConnection host port $ do
+        n <- createNode someProperties
+        addLabels [lbl1, lbl2] n
+        addLabels [lbl3] n
+        lbls <- getLabels n
+        neo4jEqual 3 (length lbls)
+        neo4jBool $ all (`elem` lbls) [lbl1, lbl2, lbl3]
+        deleteNode n
+    where lbl1 = "mylabel1"
+          lbl2 = "mylabel2"
+          lbl3 = "mylabel3"
+
+-- | Add labels to an unexisting node
+case_addUnexistingNodeLabels :: Assertion
+case_addUnexistingNodeLabels = do 
+    n <- withConnection host port $ createNode someProperties
+    let expException = Neo4jNoEntityException $ nodePath n
+    assertException expException $ withConnection host port $ do
+        deleteNode n
+        addLabels ["mylabel"] n
+
+-- | Change node labels
+case_changeNodeLabels :: Assertion
+case_changeNodeLabels = withConnection host port $ do
+        n <- createNode someProperties
+        addLabels [lbl1, lbl2] n
+        changeLabels [lbl3] n
+        lbls <- getLabels n
+        neo4jEqual [lbl3] lbls
+        deleteNode n
+    where lbl1 = "mylabel1"
+          lbl2 = "mylabel2"
+          lbl3 = "otherlabel"
+
+-- | Change node labels to empty
+case_changeNodeLabelsToEmpty :: Assertion
+case_changeNodeLabelsToEmpty = withConnection host port $ do
+        n <- createNode someProperties
+        addLabels [lbl1, lbl2] n
+        changeLabels [] n
+        lbls <- getLabels n
+        neo4jEqual [] lbls
+        deleteNode n
+    where lbl1 = "mylabel1"
+          lbl2 = "mylabel2"
+
+-- | Change labels for an unexisting node
+case_changeUnexistingNodeLabels :: Assertion
+case_changeUnexistingNodeLabels = do 
+    n <- withConnection host port $ createNode someProperties
+    let expException = Neo4jNoEntityException $ nodePath n
+    assertException expException $ withConnection host port $ do
+        deleteNode n
+        changeLabels ["mylabel"] n
+
+-- | Remove a label from a node
+case_removeNodeLabel :: Assertion
+case_removeNodeLabel = withConnection host port $ do
+        n <- createNode someProperties
+        addLabels [lbl1, lbl2] n
+        removeLabel lbl1 n
+        lbls <- getLabels n
+        neo4jEqual [lbl2] lbls
+        deleteNode n
+    where lbl1 = "mylabel1"
+          lbl2 = "mylabel2"
+
+-- | Remove an unexisting label from a node (nothing should happen)
+case_removeNodeUnexistingLabel :: Assertion
+case_removeNodeUnexistingLabel = withConnection host port $ do
+        n <- createNode someProperties
+        addLabels [lbl1] n
+        removeLabel "nolabel" n
+        lbls <- getLabels n
+        neo4jEqual [lbl1] lbls
+        deleteNode n
+    where lbl1 = "mylabel1"
+
+-- | Remove label for an unexisting node
+case_removeUnexistingNodeLabel :: Assertion
+case_removeUnexistingNodeLabel = do 
+    n <- withConnection host port $ createNode someProperties
+    let expException = Neo4jNoEntityException $ nodePath n
+    assertException expException $ withConnection host port $ do
+        deleteNode n
+        removeLabel "mylabel" n
+
+-- | Get all nodes with a label
+case_allNodesWithLabel :: Assertion
+case_allNodesWithLabel = withConnection host port $ do
+        n1 <- createNode someProperties
+        n2 <- createNode someProperties
+        n3 <- createNode someProperties
+        addLabels [lbl1, lbl2] n1
+        addLabels [lbl2] n2
+        addLabels [lbl1] n3
+        ns <- getNodesByLabelAndProperty lbl1 Nothing
+        neo4jEqual 2 (length ns)
+        neo4jBool $ all (`elem` ns) [n1, n3]
+        ns2 <- getNodesByLabelAndProperty "nolbl" Nothing
+        neo4jEqual [] ns2
+        mapM_ deleteNode [n1, n2, n3]
+    where lbl1 = "lbl1"
+          lbl2 = "lbl2"
+
+-- | Get all nodes with a label and a property
+case_allNodesWithLabelAndProperty :: Assertion
+case_allNodesWithLabelAndProperty = withConnection host port $ do
+        n1 <- createNode someProperties
+        n2 <- createNode someProperties
+        n3 <- createNode anotherProperties
+        addLabels [lbl1, lbl2] n1
+        addLabels [lbl2] n2
+        addLabels [lbl1] n3
+        ns <- getNodesByLabelAndProperty lbl1 $ Just ("doublearray", newval [0.1, -12.23 :: Double])
+        neo4jEqual [n1] ns
+        ns2 <- getNodesByLabelAndProperty lbl1 $ Just ("doublearray", newval [0.1, -12.22 :: Double])
+        neo4jEqual [] ns2
+        mapM_ deleteNode [n1, n2, n3]
+    where lbl1 = "lbl1"
+          lbl2 = "lbl2"
