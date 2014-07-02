@@ -26,7 +26,7 @@ module Database.Neo4j (
     Node(..), createNode, getNode, deleteNode, nodeId, nodePath,
     -- * Managing relationships
     Relationship(..), Direction(..), RelationshipType, createRelationship, getRelationship, deleteRelationship,
-        getRelationships, relId, relPath,
+        getRelationships, relId, relPath, allRelationshipTypes,
     -- * Managing labels and getting nodes by label
     Label, allLabels, getLabels, getNodesByLabelAndProperty, addLabels, changeLabels, removeLabel, removeLabels,
     -- * Exceptions

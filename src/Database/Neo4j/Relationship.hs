@@ -33,6 +33,10 @@ instance RelIdentifier Relationship where
 instance RelIdentifier S.ByteString where
     getRelPath t = relationshipAPI <> "/" <> t
 
+-- | Gets all relationship types in the DB
+allRelationshipTypes :: Neo4j [RelationshipType]
+allRelationshipTypes = Neo4j $ \conn -> httpRetrieveSure conn "/db/data/relationship/types"
+
 -- | Create a new relationship with a type and a set of properties
 createRelationship :: RelationshipType -> Properties -> Node -> Node -> Neo4j Relationship
 createRelationship t props nodefrom nodeto = Neo4j $ \conn -> do

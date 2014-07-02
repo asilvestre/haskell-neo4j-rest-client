@@ -331,6 +331,14 @@ case_CreateGetDeleteRelationship = withConnection host port $ do
     neo4jEqual (Just r) newN
     teardownRelTests nodeFrom nodeTo r
 
+-- | Test get all relationship properties
+case_allRelationshipProperties :: Assertion
+case_allRelationshipProperties = withConnection host port $ do
+    (nodeFrom, nodeTo, r) <- setupRelTests
+    rs <- allRelationshipTypes
+    neo4jBool $ myRelType `elem` rs
+    teardownRelTests nodeFrom nodeTo r
+
 -- | Create relationship with missing node from
 case_CreateRelationshipMissingFrom :: Assertion
 case_CreateRelationshipMissingFrom = do
