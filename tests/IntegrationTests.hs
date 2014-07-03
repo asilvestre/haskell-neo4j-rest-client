@@ -813,3 +813,33 @@ case_allNodesWithLabelAndProperty = withConnection host port $ do
         mapM_ deleteNode [n1, n2, n3]
     where lbl1 = "lbl1"
           lbl2 = "lbl2"
+
+-- | Create, get and destroy index
+case_createGetDropIndex :: Assertion
+case_createGetDropIndex = withConnection host port $ do
+        dropIndex lbl prop1
+        dropIndex lbl prop2
+        dropIndex lbl2 prop1
+        dropIndex lbl2 prop2
+        idx1 <- createIndex lbl prop1
+        idx2 <- createIndex lbl prop2
+        idx3 <- createIndex lbl2 prop1
+        idx4 <- createIndex lbl2 prop2
+        idxs <- getIndexes lbl
+        neo4jBool $ all (`elem` idxs) [idx1, idx2]
+        neo4jBool $ all (not . (`elem` idxs)) [idx3, idx4]
+        idxs2 <- getIndexes lbl2
+        neo4jBool $ all (not . (`elem` idxs2)) [idx1, idx2]
+        neo4jBool $ all (`elem` idxs2) [idx3, idx4]
+        dropIndex lbl prop1
+        dropIndex lbl prop2
+        dropIndex lbl2 prop1
+        dropIndex lbl2 prop2
+        idxs3 <- getIndexes lbl
+        idxs4 <- getIndexes lbl2
+        neo4jBool $ all (not . (`elem` idxs3)) [idx1, idx2]
+        neo4jBool $ all (not . (`elem` idxs4)) [idx3, idx4]
+    where lbl = "mylabel11"
+          lbl2 = "mylabel2"
+          prop1 = "myprop"
+          prop2 = "myprop2"

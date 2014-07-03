@@ -165,6 +165,14 @@ instance Entity Relationship where
 -- | Type for a label
 type Label = T.Text
 
+-- | Type for an index
+data Index = Index {indexLabel :: Label, indexProperties :: [T.Text]} deriving (Show, Eq)
+
+-- | JSON to Index
+instance J.FromJSON Index where
+    parseJSON (J.Object v) = Index <$> v .: "label" <*> (v .: "property_keys" >>= J.parseJSON)
+    parseJSON _ = mzero
+
 -- | Exceptions this library can raise
 data Neo4jException = Neo4jHttpException String |
                       Neo4jNonOrphanNodeDeletionException S.ByteString |

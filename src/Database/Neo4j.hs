@@ -28,7 +28,9 @@ module Database.Neo4j (
     Relationship(..), Direction(..), RelationshipType, createRelationship, getRelationship, deleteRelationship,
         getRelationships, relId, relPath, allRelationshipTypes,
     -- * Managing labels and getting nodes by label
-    Label, allLabels, getLabels, getNodesByLabelAndProperty, addLabels, changeLabels, removeLabel, removeLabels,
+    Label, allLabels, getLabels, getNodesByLabelAndProperty, addLabels, changeLabels, removeLabel,
+    -- * Indexes
+    Index(..), createIndex, getIndexes, dropIndex,
     -- * Exceptions
     Neo4jException(..)
     ) where
@@ -39,3 +41,4 @@ import Database.Neo4j.Node
 import Database.Neo4j.Relationship
 import Database.Neo4j.Property
 import Database.Neo4j.Label
+import Database.Neo4j.Index

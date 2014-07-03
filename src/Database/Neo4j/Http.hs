@@ -64,7 +64,7 @@ extractException resp = fromMaybe "" $ join $ do
 -- | Launch a POST request, this will raise an exception if 201 or 204 is not received
 httpCreate :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString -> ResourceT IO a
 httpCreate conn path body = do
-            res <- httpReq conn HT.methodPost path body (==HT.status201)
+            res <- httpReq conn HT.methodPost path body (`elem` [HT.status200, HT.status201])
             let resBody = J.eitherDecode $ HC.responseBody res
             return $ case resBody of
                         Right entity -> entity

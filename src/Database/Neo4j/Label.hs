@@ -50,10 +50,3 @@ removeLabel :: Label -> Node -> Neo4j ()
 removeLabel lbl n = Neo4j $ \conn -> (do
         _ <- httpDeleteNo404 conn (nodePath n <> "/labels/" <> TE.encodeUtf8 lbl)
         return ()) `catch` proc404Exc n
-
--- | Remove all labels for a node
--- | Raises Neo4jNoEntityException if the node doesn't exist
-removeLabels :: Node -> Neo4j ()
-removeLabels n = Neo4j $ \conn -> (do
-        _ <- httpDeleteNo404 conn (nodePath n <> "/labels")
-        return ()) `catch` proc404Exc n
