@@ -5,6 +5,7 @@ module Database.Neo4j.Relationship where
 
 import Control.Exception.Lifted (throw, catch)
 import Data.Aeson ((.=))
+import Data.Maybe (fromMaybe)
 
 import qualified Data.Aeson as J
 import qualified Data.ByteString as S
@@ -12,8 +13,9 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Network.HTTP.Types as HT
 
-import Database.Neo4j.Types
+import Database.Neo4j.Node
 import Database.Neo4j.Http
+import Database.Neo4j.Types
 
 
 relationshipAPI :: S.ByteString
@@ -32,6 +34,9 @@ instance RelIdentifier Relationship where
 
 instance RelIdentifier S.ByteString where
     getRelPath t = relationshipAPI <> "/" <> t
+
+instance RelIdentifier RelLocation where
+    getRelPath = urlPath . runRelLocation
 
 -- | Gets all relationship types in the DB
 allRelationshipTypes :: Neo4j [RelationshipType]
@@ -55,6 +60,22 @@ createRelationship t props nodefrom nodeto = Neo4j $ \conn -> do
 -- | Refresh a relationship entity with the contents in the DB
 getRelationship :: RelIdentifier a => a -> Neo4j (Maybe Relationship)
 getRelationship rel = Neo4j $ \conn -> httpRetrieve conn (getRelPath rel)
+
+-- | Get the "node from" from a relationship from the DB
+-- | Raises Neo4jNoEntityException if the node (and thus the relationship) does not exist any more
+-- | TODO: Test
+getRelationshipFrom :: Relationship -> Neo4j Node
+getRelationshipFrom rel = getNode node >>= processMaybe
+    where node = relFrom rel
+          processMaybe maybeNode = return $ fromMaybe (throw $ Neo4jNoEntityException (getNodePath node)) maybeNode
+
+-- | Get the "node to" from a relationship from the DB
+-- | Raises Neo4jNoEntityException if the node (and thus the relationship) does not exist any more
+-- | TODO: Test
+getRelationshipTo :: Relationship -> Neo4j Node
+getRelationshipTo rel = getNode node >>= processMaybe
+    where node = relTo rel
+          processMaybe maybeNode = return $ fromMaybe (throw $ Neo4jNoEntityException (getNodePath node)) maybeNode
 
 -- | Delete a relationship
 deleteRelationship :: RelIdentifier a => a -> Neo4j ()

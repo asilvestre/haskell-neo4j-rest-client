@@ -39,7 +39,8 @@ Test-Suite test-haskell-neo4j-rest-client
                      scientific ==0.3.*,
                      unordered-containers ==0.2.*,
                      HTTP ==4000.2.*,
-                     lifted-base ==0.2.*
+                     lifted-base ==0.2.*,
+                     hashable ==1.2.*
 library
   hs-source-dirs:      src
   exposed-modules:     Database.Neo4j
@@ -59,4 +60,5 @@ library
                        scientific ==0.3.*,
                        unordered-containers ==0.2.*,
                        HTTP ==4000.2.*,
-                       lifted-base ==0.2.*
+                       lifted-base ==0.2.*,
+                       hashable ==1.2.*

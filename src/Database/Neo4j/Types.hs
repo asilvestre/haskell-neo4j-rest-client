@@ -1,9 +1,13 @@
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE DeriveDataTypeable  #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Database.Neo4j.Types where
 
+import Data.Hashable (Hashable)
+import Data.Int (Int64)
+import Data.Maybe (fromMaybe)
 import Data.Monoid (mappend)
 import Data.Typeable (Typeable)
 import Control.Exception.Base (Exception)
@@ -11,8 +15,7 @@ import Control.Applicative ((<$>), (<*>))
 import Control.Monad (mzero)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Resource (ResourceT)
-import Data.Int (Int64)
-import Data.Maybe (fromMaybe)
+import GHC.Generics (Generic)
 
 import Data.Aeson ((.:))
 import qualified Data.Aeson as J
@@ -117,7 +120,8 @@ class Entity a where
 nodePath :: Node -> S.ByteString
 nodePath = urlPath . runNodeLocation . nodeLocation
 
-newtype NodeLocation = NodeLocation {runNodeLocation :: T.Text} deriving (Show, Eq)
+newtype NodeLocation = NodeLocation {runNodeLocation :: T.Text} deriving (Show, Eq, Generic)
+instance Hashable NodeLocation
 
 -- | Representation of a Neo4j node, has a location URI and a set of properties
 data Node = Node {nodeLocation :: NodeLocation, nodeProperties :: Properties} deriving (Show, Eq)
@@ -141,10 +145,14 @@ data Direction = Outgoing | Incoming | Any
 
 -- | Get the path for a node entity without host and port
 relPath :: Relationship -> S.ByteString
-relPath = urlPath . relLocation
+relPath = urlPath . runRelLocation . relLocation
+
+-- | Type for a relationship location
+newtype RelLocation = RelLocation {runRelLocation :: T.Text} deriving (Show, Eq, Generic)
+instance Hashable RelLocation
 
 -- | Type for a Neo4j relationship, has a location URI, a relationship type, a starting node and a destination node
-data Relationship = Relationship {relLocation :: T.Text,
+data Relationship = Relationship {relLocation :: RelLocation,
                                   relType :: RelationshipType,
                                   relProperties :: Properties,
                                   relFrom :: NodeLocation,
@@ -152,8 +160,9 @@ data Relationship = Relationship {relLocation :: T.Text,
 
 -- | JSON to Relationship
 instance J.FromJSON Relationship where
-    parseJSON (J.Object v) = Relationship <$> v .: "self" <*> v .: "type" <*> (v .: "data" >>= J.parseJSON) <*>
-                                (NodeLocation <$> v .: "start") <*> (NodeLocation <$> v .: "end")
+    parseJSON (J.Object v) = Relationship <$> (RelLocation <$> v .: "self") <*> v .: "type" <*>
+                                (v .: "data" >>= J.parseJSON) <*> (NodeLocation <$> v .: "start") <*>
+                                (NodeLocation <$> v .: "end")
     parseJSON _ = mzero
 
 instance Entity Relationship where
