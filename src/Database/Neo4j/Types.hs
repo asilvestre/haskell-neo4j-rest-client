@@ -106,8 +106,12 @@ emptyProperties :: M.HashMap T.Text PropertyValue
 emptyProperties = M.empty
 
 -- | Tries to get the path from a URL, we try our best otherwise return the url as is
+urlTextPath :: T.Text -> T.Text
+urlTextPath url = fromMaybe url $ T.stripPrefix "http://" url >>= return . T.dropWhile (/='/')
+
+-- | Tries to get the path from a URL, we try our best otherwise return the url as is
 urlPath :: T.Text -> S.ByteString
-urlPath url = TE.encodeUtf8 $ fromMaybe url $ T.stripPrefix "http://" url >>= return . T.dropWhile (/='/')
+urlPath = TE.encodeUtf8 . urlTextPath
 
 -- | Class for top-level Neo4j entities (nodes and relationships) useful to have generic property management code
 class Entity a where
