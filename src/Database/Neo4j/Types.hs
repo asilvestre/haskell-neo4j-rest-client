@@ -130,6 +130,10 @@ instance Hashable NodeLocation
 -- | Representation of a Neo4j node, has a location URI and a set of properties
 data Node = Node {nodeLocation :: NodeLocation, nodeProperties :: Properties} deriving (Show, Eq)
 
+-- | Get the properties of a node
+getNodeProperties :: Node -> Properties
+getNodeProperties = nodeProperties
+
 -- | JSON to Node
 instance J.FromJSON Node where
     parseJSON (J.Object v) = Node <$> (NodeLocation <$> (v .: "self")) <*> (v .: "data" >>= J.parseJSON)
@@ -161,6 +165,14 @@ data Relationship = Relationship {relLocation :: RelLocation,
                                   relProperties :: Properties,
                                   relFrom :: NodeLocation,
                                   relTo :: NodeLocation} deriving (Show, Eq)
+
+-- | Get the properties of a relationship
+getRelProperties :: Relationship -> Properties
+getRelProperties = relProperties
+
+-- | Get the type of a relationship
+getRelType :: Relationship -> RelationshipType
+getRelType = relType
 
 -- | JSON to Relationship
 instance J.FromJSON Relationship where

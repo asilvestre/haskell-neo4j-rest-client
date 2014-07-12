@@ -16,17 +16,17 @@ module Database.Neo4j (
     -- $use
 
     -- * Connection handling objects
-    Connection(..), Hostname, Port, newConnection, withConnection,
+    Connection, Hostname, Port, newConnection, withConnection,
     -- * Main monadic type to handle sequences of commands to Neo4j
-    Neo4j(..),
+    Neo4j,
     -- * Constructing and managing node/relationship properties
     Val(..), PropertyValue(..), newval, (|:), Properties, emptyProperties, getProperties, getProperty, setProperties,
         setProperty, deleteProperties, deleteProperty, 
     -- * Managing nodes
-    Node(..), createNode, getNode, deleteNode, nodeId, nodePath,
+    Node, getNodeProperties, createNode, getNode, deleteNode, nodeId, nodePath,
     -- * Managing relationships
-    Relationship(..), Direction(..), RelationshipType, createRelationship, getRelationship, deleteRelationship,
-        getRelationships, relId, relPath, allRelationshipTypes,
+    Relationship, Direction(..), RelationshipType, createRelationship, getRelationship, deleteRelationship,
+        getRelationships, relId, relPath, allRelationshipTypes, getRelProperties, getRelType,
     -- * Managing labels and getting nodes by label
     Label, allLabels, getLabels, getNodesByLabelAndProperty, addLabels, changeLabels, removeLabel,
     -- * Indexes
