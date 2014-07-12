@@ -1,6 +1,11 @@
 {-# LANGUAGE OverloadedStrings  #-}
 
-module Database.Neo4j.Graph where
+module Database.Neo4j.Graph (
+    Graph, empty, addNode, hasNode, hasRelationship, deleteNode, addRelationship, getOrphansFrom,
+    getOrphansTo, cleanOrphanRelationships, deleteRelationship, getRelationshipNodeFrom,
+    getRelationshipNodeTo, setNodeLabels, addNodeLabel, getNodeLabels, nodeFilter,
+    relationshipFilter, union, difference, intersection, getNodes
+    )where
 
 
 import qualified Data.HashMap.Lazy as M
@@ -15,7 +20,8 @@ type LabelNodeIndex = M.HashMap Label NodeSet
 type LabelSet = HS.HashSet Label
 type NodeLabelIndex = M.HashMap NodeLocation LabelSet
 
-data Graph = Graph {nodes :: NodeIndex, labels :: LabelNodeIndex, rels :: RelIndex, nodeLabels :: NodeLabelIndex}
+data Graph = Graph {nodes :: NodeIndex, labels :: LabelNodeIndex, rels :: RelIndex,
+                        nodeLabels :: NodeLabelIndex} deriving (Eq, Show)
 
 -- | Create an empty graph
 empty :: Graph
@@ -28,6 +34,9 @@ addNode n g = g {nodes = M.insert (nodeLocation n) n (nodes g)}
 -- | Whether a node is present in the graph
 hasNode :: Node -> Graph -> Bool
 hasNode n g = nodeLocation n `M.member` nodes g
+
+getNodes :: Graph -> [Node]
+getNodes g = M.elems $ nodes g
 
 -- | Whether a node is present in the graph
 hasRelationship :: Relationship -> Graph -> Bool 

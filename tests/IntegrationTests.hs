@@ -20,6 +20,8 @@ import Test.HUnit.Base hiding (Test, Node)
 --import qualified Test.HUnit as H
 
 import Database.Neo4j
+--import qualified Database.Neo4j.Graph as G
+import qualified Database.Neo4j.Batch as B
 
 (<>) :: String -> String -> String
 (<>) = mappend
@@ -843,3 +845,17 @@ case_createGetDropIndex = withConnection host port $ do
           lbl2 = "mylabel2"
           prop1 = "myprop"
           prop2 = "myprop2"
+
+case_batch :: Assertion
+case_batch = withConnection host port $ do
+                g <- B.runBatch $ do
+                        n <- B.createNode someProperties
+                        B.getNode n
+                liftIO $ print g
+
+case_batch2 :: Assertion
+case_batch2 = withConnection host port $ do
+                g <- B.runBatch $ do
+                        _ <- B.createNode someProperties
+                        B.createNode anotherProperties
+                liftIO $ print g

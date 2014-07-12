@@ -35,10 +35,10 @@ module Database.Neo4j (
     Neo4jException(..)
     ) where
 
-import Database.Neo4j.Types
+import Database.Neo4j.Index
 import Database.Neo4j.Http
+import Database.Neo4j.Label
 import Database.Neo4j.Node
 import Database.Neo4j.Relationship
 import Database.Neo4j.Property
-import Database.Neo4j.Label
-import Database.Neo4j.Index
+import Database.Neo4j.Types

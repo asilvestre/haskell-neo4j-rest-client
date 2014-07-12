@@ -4,15 +4,15 @@
 module Database.Neo4j.Batch where
 
 import Control.Exception.Base (throw)
-import Data.Aeson ((.=))
+import Data.Aeson ((.=), (.:))
 import Data.Maybe (fromMaybe)
 import Data.String (fromString)
 import Control.Monad.State (state, State, runState)
 
 import qualified Data.Aeson as J
 import qualified Data.Aeson.Types as JT
-import qualified Data.ByteString as S
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
 import qualified Network.HTTP.Types as HT
 
@@ -35,16 +35,16 @@ defCmd = BatchCmd{cmdMethod = HT.methodGet, cmdPath = "", cmdBody = "", cmdParse
 
 data BatchState = BatchState {commands :: [BatchCmd], batchId :: Int}
 
-newtype Batch a = Batch (State BatchState (BatchFuture a))
+type Batch a = State BatchState (BatchFuture a)
 
 getCmds :: Batch a -> [BatchCmd]
-getCmds (Batch s) = let (_, BatchState cmds _) = runState s (BatchState [] (-1)) in cmds
+getCmds s = let (_, BatchState cmds _) = runState s (BatchState [] (-1)) in reverse cmds
 
 instance J.ToJSON (Batch a) where
     toJSON b = J.toJSON $ getCmds b
 
 instance J.ToJSON BatchCmd where
-    toJSON (BatchCmd m p b _ cId) = J.object ["method" .= S.unpack m, "to" .= p, "body" .= b, "id" .= cId]
+    toJSON (BatchCmd m p b _ cId) = J.object ["method" .= TE.decodeUtf8 m, "to" .= p, "body" .= b, "id" .= cId]
 
 class NodeBatchIdentifier a where
     getNodeBatchId :: a -> T.Text
@@ -53,17 +53,18 @@ instance NodeBatchIdentifier Node where
     getNodeBatchId = urlMinPath . runNodeLocation . nodeLocation
 
 instance NodeBatchIdentifier (BatchFuture Node) where
-    getNodeBatchId (BatchFuture bId) = "/node/{" <> (fromString . show) bId <> "}"
+    getNodeBatchId (BatchFuture bId) = "{" <> (fromString . show) bId <> "}"
 
 tryParse :: J.FromJSON a => J.Value -> a
-tryParse jb = let res = flip JT.parseEither jb $ \obj -> J.parseJSON obj
+tryParse (J.Object jb) = let res = flip JT.parseEither jb $ \obj -> (obj .: "body") >>= J.parseJSON
                in case res of
                      Right entity -> entity
                      Left e -> throw $ Neo4jParseException ("Error parsing entity: " ++ e)
+tryParse _ = throw $ Neo4jParseException "Error expecting an object"
 
 nextState :: BatchCmd -> Batch a
-nextState cmd = Batch $ state $ \(BatchState cmds cId) ->
-                                     (BatchFuture $ cId + 1, BatchState (cmd{cmdId = cId + 1} : cmds) (cId + 1))
+nextState cmd = state $ \(BatchState cmds cId) ->
+                                 (BatchFuture $ cId + 1, BatchState (cmd{cmdId = cId + 1} : cmds) (cId + 1))
 
 createNode :: Properties -> Batch Node
 createNode props = nextState cmd
@@ -76,7 +77,7 @@ getNode n = nextState cmd
           parser jn = addNode (tryParse jn)
 
 parseBatchResponse :: J.Array -> Batch a -> Graph
-parseBatchResponse jarr b = foldr ($) empty appliedParsers
+parseBatchResponse jarr b = foldl (flip ($)) empty appliedParsers
     where cmds = getCmds b
           parsers = foldl (\ps cmd -> cmdParse cmd : ps) [] cmds
           appliedParsers = zipWith ($) parsers (V.toList jarr)
