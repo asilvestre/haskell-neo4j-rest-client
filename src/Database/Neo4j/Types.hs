@@ -113,6 +113,11 @@ urlTextPath url = fromMaybe url $ T.stripPrefix "http://" url >>= return . T.dro
 urlPath :: T.Text -> S.ByteString
 urlPath = TE.encodeUtf8 . urlTextPath
 
+-- | Path without the /db/data part, useful for batch paths and such
+urlMinPath :: T.Text -> T.Text
+urlMinPath url =  fromMaybe url $ T.stripPrefix "/db/data" (urlTextPath url)
+
+
 -- | Class for top-level Neo4j entities (nodes and relationships) useful to have generic property management code
 class Entity a where
     entityPath :: a -> S.ByteString

@@ -20,7 +20,7 @@ import Test.HUnit.Base hiding (Test, Node)
 --import qualified Test.HUnit as H
 
 import Database.Neo4j
---import qualified Database.Neo4j.Graph as G
+import qualified Database.Neo4j.Graph as G
 import qualified Database.Neo4j.Batch as B
 
 (<>) :: String -> String -> String
@@ -846,16 +846,23 @@ case_createGetDropIndex = withConnection host port $ do
           prop1 = "myprop"
           prop2 = "myprop2"
 
+-- | Test batch, create a node and get it again
 case_batch :: Assertion
 case_batch = withConnection host port $ do
                 g <- B.runBatch $ do
                         n <- B.createNode someProperties
                         B.getNode n
-                liftIO $ print g
+                neo4jEqual 1 (length $ G.getNodes g)
+                neo4jBool $ someProperties `elem` map getNodeProperties (G.getNodes g)
 
+-- | Test batch, create two nodes in a batch
 case_batch2 :: Assertion
 case_batch2 = withConnection host port $ do
                 g <- B.runBatch $ do
                         _ <- B.createNode someProperties
                         B.createNode anotherProperties
-                liftIO $ print g
+                neo4jEqual 2 (length $ G.getNodes g)
+                neo4jBool $ someProperties `elem` map getNodeProperties (G.getNodes g)
+                neo4jBool $ anotherProperties `elem` map getNodeProperties (G.getNodes g)
+
+-- | Test batch, create two nodes and two relationships between them

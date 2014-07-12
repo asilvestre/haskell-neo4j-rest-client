@@ -4,7 +4,7 @@ module Database.Neo4j.Graph (
     Graph, empty, addNode, hasNode, hasRelationship, deleteNode, addRelationship, getOrphansFrom,
     getOrphansTo, cleanOrphanRelationships, deleteRelationship, getRelationshipNodeFrom,
     getRelationshipNodeTo, setNodeLabels, addNodeLabel, getNodeLabels, nodeFilter,
-    relationshipFilter, union, difference, intersection, getNodes
+    relationshipFilter, union, difference, intersection, getNodes, getRelationships
     )where
 
 
@@ -35,6 +35,7 @@ addNode n g = g {nodes = M.insert (nodeLocation n) n (nodes g)}
 hasNode :: Node -> Graph -> Bool
 hasNode n g = nodeLocation n `M.member` nodes g
 
+-- | Get a list with all the nodes in the graph
 getNodes :: Graph -> [Node]
 getNodes g = M.elems $ nodes g
 
@@ -55,6 +56,10 @@ deleteNode n g = g {nodes = M.delete (nodeLocation n) (nodes g),
 -- | Add a relationship to the graph
 addRelationship :: Relationship -> Graph -> Graph
 addRelationship r g = g {rels = M.insert (relLocation r) r (rels g)}
+
+-- | Get a list with all the relationships in the graph
+getRelationships :: Graph -> [Relationship]
+getRelationships g = M.elems $ rels g
 
  -- | Get relationships missing their "from" node
 getOrphansFrom :: Graph -> [Relationship]
