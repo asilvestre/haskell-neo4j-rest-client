@@ -8,7 +8,7 @@ module Database.Neo4j.Types where
 import Data.Hashable (Hashable)
 import Data.Int (Int64)
 import Data.Maybe (fromMaybe)
-import Data.Monoid (mappend)
+import Data.Monoid (Monoid, mappend)
 import Data.Typeable (Typeable)
 import Control.Exception.Base (Exception)
 import Control.Applicative ((<$>), (<*>))
@@ -28,7 +28,7 @@ import qualified Data.Vector as V
 import qualified Network.HTTP.Conduit as HC
 import qualified Network.HTTP.Types as HT
 
-(<>) :: S.ByteString -> S.ByteString -> S.ByteString
+(<>) :: (Monoid a) => a -> a -> a
 (<>) = mappend
 
 -- | Type for a single value of a Neo4j property

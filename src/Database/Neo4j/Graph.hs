@@ -18,8 +18,8 @@ type NodeLabelIndex = M.HashMap NodeLocation LabelSet
 data Graph = Graph {nodes :: NodeIndex, labels :: LabelNodeIndex, rels :: RelIndex, nodeLabels :: NodeLabelIndex}
 
 -- | Create an empty graph
-emptyGraph :: Graph
-emptyGraph = Graph {nodes = M.empty, labels = M.empty, rels = M.empty, nodeLabels = M.empty}
+empty :: Graph
+empty = Graph {nodes = M.empty, labels = M.empty, rels = M.empty, nodeLabels = M.empty}
 
 -- | Add a node to the graph
 addNode :: Node -> Graph -> Graph
