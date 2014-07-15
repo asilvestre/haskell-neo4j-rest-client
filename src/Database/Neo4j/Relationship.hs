@@ -20,7 +20,7 @@ import Database.Neo4j.Types
 
 -- | Get the ID of a relationship
 relId :: Relationship -> S.ByteString
-relId n = S.drop (pathLength + 1) (relPath n)
+relId n = S.drop (pathLength + 1) (runRelIdentifier n)
     where pathLength = S.length relationshipAPI
 
 -- | Gets all relationship types in the DB
@@ -34,12 +34,12 @@ createRelationship t props nodefrom nodeto = Neo4j $ \conn -> do
             case res of
                         Right rel -> return rel
                         Left expl -> wrapExc expl
-    where reqPath = nodePath nodefrom <> "/relationships"
-          reqBody = J.encode $ J.object ["to" .= runNodeUrl (nodeLocation nodeto), "type" .= t,
+    where reqPath = runNodeIdentifier nodefrom <> "/relationships"
+          reqBody = J.encode $ J.object ["to" .= runNodeUrl (nodeUrl nodeto), "type" .= t,
                                          "data" .= J.toJSON props]
           wrapExc msg
-            | msg == "StartNodeNotFoundException" = throw (Neo4jNoEntityException $ nodePath nodefrom)
-            | msg == "EndNodeNotFoundException" = throw (Neo4jNoEntityException $ nodePath nodeto)
+            | msg == "StartNodeNotFoundException" = throw (Neo4jNoEntityException $ runNodeIdentifier nodefrom)
+            | msg == "EndNodeNotFoundException" = throw (Neo4jNoEntityException $ runNodeIdentifier nodeto)
             | otherwise = throw (Neo4jHttpException $ T.unpack msg)
 
 -- | Refresh a relationship entity with the contents in the DB
@@ -69,13 +69,13 @@ deleteRelationship rel = Neo4j $ \conn -> httpDelete conn (runRelIdentifier rel)
 -- | Get all relationships for a node, if the node has disappeared it will raise an exception
 getRelationships :: Node -> Direction -> [RelationshipType] -> Neo4j [Relationship]
 getRelationships n dir types = Neo4j $ \conn -> 
-            httpRetrieveSure conn (nodePath n <> "/relationships/" <> dirStr dir <> filterStr types) `catch` procExc
+      httpRetrieveSure conn (runNodeIdentifier n <> "/relationships/" <> dirStr dir <> filterStr types) `catch` procExc
     where dirStr Outgoing = "out"
           dirStr Incoming = "in"
           dirStr Any = "all"
           filterStr [] = ""
           filterStr f = "/" <> TE.encodeUtf8 (T.intercalate "%26" f)
           procExc exc@(Neo4jUnexpectedResponseException s)
-                  | s == HT.status404 = throw (Neo4jNoEntityException $ nodePath n)
+                  | s == HT.status404 = throw (Neo4jNoEntityException $ runNodeIdentifier n)
                   | otherwise = throw exc
           procExc exc = throw exc

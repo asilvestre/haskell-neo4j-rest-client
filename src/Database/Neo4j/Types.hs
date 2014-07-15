@@ -106,16 +106,12 @@ emptyProperties :: M.HashMap T.Text PropertyValue
 emptyProperties = M.empty
 
 -- | Tries to get the path from a URL, we try our best otherwise return the url as is
-urlTextPath :: T.Text -> T.Text
-urlTextPath url = fromMaybe url $ T.stripPrefix "http://" url >>= return . T.dropWhile (/='/')
-
--- | Tries to get the path from a URL, we try our best otherwise return the url as is
-urlPath :: T.Text -> S.ByteString
-urlPath = TE.encodeUtf8 . urlTextPath
+urlPath :: T.Text -> T.Text
+urlPath url = fromMaybe url $ T.stripPrefix "http://" url >>= return . T.dropWhile (/='/')
 
 -- | Path without the /db/data part, useful for batch paths and such
 urlMinPath :: T.Text -> T.Text
-urlMinPath url =  fromMaybe url $ T.stripPrefix "/db/data" (urlTextPath url)
+urlMinPath url =  fromMaybe url $ T.stripPrefix "/db/data" (urlPath url)
 
 
 -- | Class for top-level Neo4j entities (nodes and relationships) useful to have generic property management code
@@ -126,14 +122,14 @@ class Entity a where
     setEntityProperties :: a -> Properties -> a
     
 -- | Get the path for a node entity without host and port
-nodePath :: Node -> S.ByteString
-nodePath = urlPath . runNodeUrl . nodeLocation
+nodePath :: Node -> NodePath
+nodePath = NodePath . urlPath . runNodeUrl . nodeUrl
 
 newtype NodeUrl = NodeUrl {runNodeUrl :: T.Text} deriving (Show, Eq, Generic)
 instance Hashable NodeUrl
 
 -- | Representation of a Neo4j node, has a location URI and a set of properties
-data Node = Node {nodeLocation :: NodeUrl, nodeProperties :: Properties} deriving (Show, Eq)
+data Node = Node {nodeUrl :: NodeUrl, nodeProperties :: Properties} deriving (Show, Eq)
 
 -- | Get the properties of a node
 getNodeProperties :: Node -> Properties
@@ -145,25 +141,25 @@ instance J.FromJSON Node where
     parseJSON _ = mzero
 
 instance Entity Node where
-    entityPath = nodePath
-    propertyPath n = nodePath n <> "/properties"
+    entityPath = runNodeIdentifier
+    propertyPath n = runNodeIdentifier n <> "/properties"
     getEntityProperties = nodeProperties
     setEntityProperties n props = n {nodeProperties = props}
 
 nodeAPI :: S.ByteString
 nodeAPI = "/db/data/node"
 
-newtype NodePath = NodePath {runNodePath :: S.ByteString} deriving (Show, Eq, Generic)
+newtype NodePath = NodePath {runNodePath :: T.Text} deriving (Show, Eq, Generic)
 instance Hashable NodePath
 
 class NodeIdentifier a where
     getNodePath :: a -> NodePath
 
 instance NodeIdentifier Node where
-    getNodePath n = NodePath $ nodePath n
+    getNodePath = nodePath
 
 instance NodeIdentifier S.ByteString where
-    getNodePath t = NodePath $ nodeAPI <> "/" <> t
+    getNodePath t = NodePath $ TE.decodeUtf8 $ nodeAPI <> "/" <> t
 
 instance NodeIdentifier NodePath where
     getNodePath = id
@@ -172,7 +168,7 @@ instance NodeIdentifier NodeUrl where
     getNodePath n = NodePath $ (urlPath . runNodeUrl) n
 
 runNodeIdentifier :: NodeIdentifier a => a -> S.ByteString
-runNodeIdentifier = runNodePath . getNodePath
+runNodeIdentifier = TE.encodeUtf8 . runNodePath . getNodePath
 
 -- | Type for a relationship type description
 type RelationshipType = T.Text
@@ -181,8 +177,8 @@ type RelationshipType = T.Text
 data Direction = Outgoing | Incoming | Any
 
 -- | Get the path for a node entity without host and port
-relPath :: Relationship -> S.ByteString
-relPath = urlPath . runRelUrl . relLocation
+relPath :: Relationship -> RelPath
+relPath = RelPath . urlPath . runRelUrl . relLocation
 
 -- | Type for a relationship location
 newtype RelUrl = RelUrl {runRelUrl :: T.Text} deriving (Show, Eq, Generic)
@@ -211,34 +207,34 @@ instance J.FromJSON Relationship where
     parseJSON _ = mzero
 
 instance Entity Relationship where
-    entityPath = relPath
-    propertyPath r = relPath r <> "/properties"
+    entityPath = runRelIdentifier
+    propertyPath r = runRelIdentifier r <> "/properties"
     getEntityProperties = relProperties
     setEntityProperties r props = r {relProperties = props}
 
 relationshipAPI :: S.ByteString
 relationshipAPI = "/db/data/relationship"
 
-newtype RelPath = RelPath {runRelPath :: S.ByteString} deriving (Show, Eq, Generic)
+newtype RelPath = RelPath {runRelPath :: T.Text} deriving (Show, Eq, Generic)
 instance Hashable RelPath
 
 class RelIdentifier a where
     getRelPath :: a -> RelPath
 
 instance RelIdentifier Relationship where
-    getRelPath = RelPath . relPath
+    getRelPath = relPath
 
 instance RelIdentifier RelPath where
     getRelPath = id
 
 instance RelIdentifier S.ByteString where
-    getRelPath t = RelPath $ relationshipAPI <> "/" <> t
+    getRelPath t = RelPath $ TE.decodeUtf8 $ relationshipAPI <> "/" <> t
 
 instance RelIdentifier RelUrl where
     getRelPath = RelPath . urlPath . runRelUrl
 
 runRelIdentifier :: RelIdentifier a => a -> S.ByteString
-runRelIdentifier = runRelPath . getRelPath
+runRelIdentifier = TE.encodeUtf8 . runRelPath . getRelPath
 
 -- | Type for a label
 type Label = T.Text

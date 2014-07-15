@@ -14,7 +14,7 @@ import Database.Neo4j.Http
 
 -- | Get the ID of a node
 nodeId :: Node -> S.ByteString
-nodeId n = S.drop (pathLength + 1) (nodePath n)
+nodeId n = S.drop (pathLength + 1) (runNodeIdentifier n)
     where pathLength = S.length nodeAPI
 
 -- | Create a new node with a set of properties
