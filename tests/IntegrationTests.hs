@@ -847,22 +847,33 @@ case_createGetDropIndex = withConnection host port $ do
           prop2 = "myprop2"
 
 -- | Test batch, create a node and get it again
-case_batch :: Assertion
-case_batch = withConnection host port $ do
+case_batchCreateGetNode :: Assertion
+case_batchCreateGetNode = withConnection host port $ do
                 g <- B.runBatch $ do
                         n <- B.createNode someProperties
                         B.getNode n
                 neo4jEqual 1 (length $ G.getNodes g)
                 neo4jBool $ someProperties `elem` map getNodeProperties (G.getNodes g)
+                deleteNode (head $ G.getNodes g)
 
 -- | Test batch, create two nodes in a batch
-case_batch2 :: Assertion
-case_batch2 = withConnection host port $ do
+case_batchCreate2Nodes :: Assertion
+case_batchCreate2Nodes = withConnection host port $ do
                 g <- B.runBatch $ do
                         _ <- B.createNode someProperties
                         B.createNode anotherProperties
                 neo4jEqual 2 (length $ G.getNodes g)
                 neo4jBool $ someProperties `elem` map getNodeProperties (G.getNodes g)
                 neo4jBool $ anotherProperties `elem` map getNodeProperties (G.getNodes g)
+                mapM_ deleteNode (G.getNodes g)
+
+-- | Test batch, create and delete
+case_batchCreateDeleteNode :: Assertion
+case_batchCreateDeleteNode = withConnection host port $ do
+                g <- B.runBatch $ do
+                        n <- B.createNode someProperties
+                        B.deleteNode n
+                liftIO $ print g
+                neo4jEqual 0 (length $ G.getNodes g)
 
 -- | Test batch, create two nodes and two relationships between them

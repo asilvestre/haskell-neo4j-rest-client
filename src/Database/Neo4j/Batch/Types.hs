@@ -41,12 +41,21 @@ instance J.ToJSON (Batch a) where
 instance J.ToJSON BatchCmd where
     toJSON (BatchCmd m p b _ cId) = J.object ["method" .= TE.decodeUtf8 m, "to" .= p, "body" .= b, "id" .= cId]
 
-tryParse :: J.FromJSON a => J.Value -> a
-tryParse (J.Object jb) = let res = flip JT.parseEither jb $ \obj -> (obj .: "body") >>= J.parseJSON
+-- | Helper function to parse a batch element response from a body entry
+tryParseBody :: J.FromJSON a => J.Value -> a
+tryParseBody (J.Object jb) = let res = flip JT.parseEither jb $ \obj -> (obj .: "body") >>= J.parseJSON
                in case res of
                      Right entity -> entity
                      Left e -> throw $ Neo4jParseException ("Error parsing entity: " ++ e)
-tryParse _ = throw $ Neo4jParseException "Error expecting an object"
+tryParseBody _ = throw $ Neo4jParseException "Error expecting an object"
+
+-- | Helper function to parse a batch element response from a from entry
+tryParseFrom :: J.FromJSON a => J.Value -> a
+tryParseFrom (J.Object jb) = let res = flip JT.parseEither jb $ \obj -> (obj .: "from") >>= J.parseJSON
+               in case res of
+                     Right entity -> entity
+                     Left e -> throw $ Neo4jParseException ("Error parsing entity: " ++ e)
+tryParseFrom _ = throw $ Neo4jParseException "Error expecting an object"
 
 nextState :: BatchCmd -> Batch a
 nextState cmd = state $ \(BatchState cmds cId) ->
@@ -55,7 +64,7 @@ nextState cmd = state $ \(BatchState cmds cId) ->
 parseBatchResponse :: J.Array -> Batch a -> Graph
 parseBatchResponse jarr b = foldl (flip ($)) empty appliedParsers
     where cmds = getCmds b
-          parsers = foldl (\ps cmd -> cmdParse cmd : ps) [] cmds
+          parsers = foldr (\cmd ps -> cmdParse cmd : ps) [] cmds
           appliedParsers = zipWith ($) parsers (V.toList jarr)
 
 runBatch :: Batch a -> Neo4j Graph

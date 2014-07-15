@@ -3,7 +3,7 @@
 
 module Database.Neo4j.Batch (
     Batch, runBatch,
-    createNode, getNode
+    createNode, getNode, deleteNode
     )where
 
 import Database.Neo4j.Batch.Node

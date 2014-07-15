@@ -8,17 +8,18 @@ module Database.Neo4j.Graph (
     )where
 
 
+import qualified Data.ByteString as S
 import qualified Data.HashMap.Lazy as M
 import qualified Data.HashSet as HS
 
 import Database.Neo4j.Types
 
-type NodeIndex = M.HashMap NodeLocation Node
-type RelIndex = M.HashMap RelLocation Relationship
-type NodeSet = HS.HashSet NodeLocation
+type NodeIndex = M.HashMap NodePath Node
+type RelIndex = M.HashMap RelPath Relationship
+type NodeSet = HS.HashSet NodePath
 type LabelNodeIndex = M.HashMap Label NodeSet
 type LabelSet = HS.HashSet Label
-type NodeLabelIndex = M.HashMap NodeLocation LabelSet
+type NodeLabelIndex = M.HashMap NodePath LabelSet
 
 data Graph = Graph {nodes :: NodeIndex, labels :: LabelNodeIndex, rels :: RelIndex,
                         nodeLabels :: NodeLabelIndex} deriving (Eq, Show)
@@ -29,33 +30,33 @@ empty = Graph {nodes = M.empty, labels = M.empty, rels = M.empty, nodeLabels = M
 
 -- | Add a node to the graph
 addNode :: Node -> Graph -> Graph
-addNode n g = g {nodes = M.insert (nodeLocation n) n (nodes g)}
+addNode n g = g {nodes = M.insert (getNodePath n) n (nodes g)}
 
 -- | Whether a node is present in the graph
-hasNode :: Node -> Graph -> Bool
-hasNode n g = nodeLocation n `M.member` nodes g
+hasNode :: NodeIdentifier a => a -> Graph -> Bool
+hasNode n g = getNodePath n `M.member` nodes g
 
 -- | Get a list with all the nodes in the graph
 getNodes :: Graph -> [Node]
 getNodes g = M.elems $ nodes g
 
 -- | Whether a node is present in the graph
-hasRelationship :: Relationship -> Graph -> Bool 
-hasRelationship r g = relLocation r `M.member` rels g
+hasRelationship :: RelIdentifier a => a -> Graph -> Bool 
+hasRelationship r g = getRelPath r `M.member` rels g
 
 -- | Delete a node from the graph
-deleteNode :: Node -> Graph -> Graph
-deleteNode n g = g {nodes = M.delete (nodeLocation n) (nodes g),
+deleteNode :: NodeIdentifier a => a -> Graph -> Graph
+deleteNode n g = g {nodes = M.delete nodeLoc (nodes g),
                  labels = cleanLabelNodeIndex $ removeNodeFromLabels (labels g) labelsForNode,
                  nodeLabels = M.delete nodeLoc (nodeLabels g)}
-    where labelsForNode = M.lookupDefault HS.empty (nodeLocation n) (nodeLabels g)
-          nodeLoc = nodeLocation n
+    where labelsForNode = M.lookupDefault HS.empty nodeLoc (nodeLabels g)
+          nodeLoc = getNodePath n
           removeNodeFromLabels = HS.foldl' (\acc x -> M.insertWith (\_ -> HS.delete nodeLoc) x HS.empty acc)
           cleanLabelNodeIndex = M.filter (/=HS.empty) 
 
 -- | Add a relationship to the graph
 addRelationship :: Relationship -> Graph -> Graph
-addRelationship r g = g {rels = M.insert (relLocation r) r (rels g)}
+addRelationship r g = g {rels = M.insert (getRelPath r) r (rels g)}
 
 -- | Get a list with all the relationships in the graph
 getRelationships :: Graph -> [Relationship]
@@ -64,47 +65,47 @@ getRelationships g = M.elems $ rels g
  -- | Get relationships missing their "from" node
 getOrphansFrom :: Graph -> [Relationship]
 getOrphansFrom g = M.elems $ M.filter noNode (rels g)
-    where noNode r = not $ relFrom r `M.member` nodes g
+    where noNode r = not $ getNodePath (relFrom r) `M.member` nodes g
 
 -- | Get relationships missing their "to" node
 getOrphansTo :: Graph -> [Relationship]
 getOrphansTo g = M.elems $ M.filter noNode (rels g)
-    where noNode r = not $ relTo r `M.member` nodes g
+    where noNode r = not $ getNodePath (relTo r) `M.member` nodes g
 
 -- | Remove all relationships with a missing node
 cleanOrphanRelationships :: Graph -> Graph
 cleanOrphanRelationships g = foldl (flip deleteRelationship) g (getOrphansFrom g ++ getOrphansTo g)
 
 -- | Delete a relationship from the graph
-deleteRelationship :: Relationship -> Graph -> Graph
-deleteRelationship r g = g {rels = M.delete (relLocation r) (rels g)}
+deleteRelationship :: RelIdentifier a => a -> Graph -> Graph
+deleteRelationship r g = g {rels = M.delete (getRelPath r) (rels g)}
 
 -- | Get the "node from" from a relationship
 getRelationshipNodeFrom :: Relationship -> Graph -> Maybe Node
-getRelationshipNodeFrom r g = M.lookup (relFrom r) (nodes g) 
+getRelationshipNodeFrom r g = M.lookup (getNodePath (relFrom r)) (nodes g) 
 
 -- | Get the "node to" from a relationship
 getRelationshipNodeTo :: Relationship -> Graph -> Maybe Node
-getRelationshipNodeTo r g = M.lookup (relTo r) (nodes g)
+getRelationshipNodeTo r g = M.lookup (getNodePath (relTo r)) (nodes g)
 
 -- | Set what labels a node has
 setNodeLabels :: Node -> [Label] -> Graph -> Graph
-setNodeLabels n lbls g = g {nodeLabels = M.insert (nodeLocation n) (HS.fromList lbls) (nodeLabels g),
+setNodeLabels n lbls g = g {nodeLabels = M.insert (getNodePath n) (HS.fromList lbls) (nodeLabels g),
                             labels = insertLabels lbls (labels g)}
     where insertLabels xs acc = foldl (\accum x -> M.insertWith HS.union x defaultNodeSet accum) acc xs
-          defaultNodeSet = HS.singleton $ nodeLocation n
+          defaultNodeSet = HS.singleton $ getNodePath n
 
 -- | Add a label to a node
 addNodeLabel :: Node -> Label -> Graph -> Graph
 addNodeLabel n lbl g = g {nodeLabels = M.insertWith HS.union locationForNode (HS.singleton lbl) nodeLabelIndex,
                             labels = M.insertWith HS.union lbl (HS.singleton locationForNode) labelNodeIndex}
-    where locationForNode = nodeLocation n
+    where locationForNode = getNodePath n
           nodeLabelIndex = nodeLabels g
           labelNodeIndex = labels g
 
 -- | Get the labels of a node
 getNodeLabels :: Node -> Graph -> LabelSet
-getNodeLabels n g = let loc = nodeLocation n in M.lookupDefault HS.empty loc (nodeLabels g)
+getNodeLabels n g = let loc = getNodePath n in M.lookupDefault HS.empty loc (nodeLabels g)
 
 -- | Filter the nodes of a graph
 nodeFilter :: (Node -> Bool) -> Graph -> Graph

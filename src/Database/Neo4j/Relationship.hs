@@ -18,25 +18,10 @@ import Database.Neo4j.Http
 import Database.Neo4j.Types
 
 
-relationshipAPI :: S.ByteString
-relationshipAPI = "/db/data/relationship"
-
 -- | Get the ID of a relationship
 relId :: Relationship -> S.ByteString
 relId n = S.drop (pathLength + 1) (relPath n)
     where pathLength = S.length relationshipAPI
-
-class RelIdentifier a where
-    getRelPath :: a -> S.ByteString
-
-instance RelIdentifier Relationship where
-    getRelPath = relPath
-
-instance RelIdentifier S.ByteString where
-    getRelPath t = relationshipAPI <> "/" <> t
-
-instance RelIdentifier RelLocation where
-    getRelPath = urlPath . runRelLocation
 
 -- | Gets all relationship types in the DB
 allRelationshipTypes :: Neo4j [RelationshipType]
@@ -50,7 +35,7 @@ createRelationship t props nodefrom nodeto = Neo4j $ \conn -> do
                         Right rel -> return rel
                         Left expl -> wrapExc expl
     where reqPath = nodePath nodefrom <> "/relationships"
-          reqBody = J.encode $ J.object ["to" .= runNodeLocation (nodeLocation nodeto), "type" .= t,
+          reqBody = J.encode $ J.object ["to" .= runNodeUrl (nodeLocation nodeto), "type" .= t,
                                          "data" .= J.toJSON props]
           wrapExc msg
             | msg == "StartNodeNotFoundException" = throw (Neo4jNoEntityException $ nodePath nodefrom)
@@ -59,7 +44,7 @@ createRelationship t props nodefrom nodeto = Neo4j $ \conn -> do
 
 -- | Refresh a relationship entity with the contents in the DB
 getRelationship :: RelIdentifier a => a -> Neo4j (Maybe Relationship)
-getRelationship rel = Neo4j $ \conn -> httpRetrieve conn (getRelPath rel)
+getRelationship rel = Neo4j $ \conn -> httpRetrieve conn (runRelIdentifier rel)
 
 -- | Get the "node from" from a relationship from the DB
 -- | Raises Neo4jNoEntityException if the node (and thus the relationship) does not exist any more
@@ -67,7 +52,7 @@ getRelationship rel = Neo4j $ \conn -> httpRetrieve conn (getRelPath rel)
 getRelationshipFrom :: Relationship -> Neo4j Node
 getRelationshipFrom rel = getNode node >>= processMaybe
     where node = relFrom rel
-          processMaybe maybeNode = return $ fromMaybe (throw $ Neo4jNoEntityException (getNodePath node)) maybeNode
+          processMaybe n = return $ fromMaybe (throw $ Neo4jNoEntityException (runNodeIdentifier node)) n
 
 -- | Get the "node to" from a relationship from the DB
 -- | Raises Neo4jNoEntityException if the node (and thus the relationship) does not exist any more
@@ -75,11 +60,11 @@ getRelationshipFrom rel = getNode node >>= processMaybe
 getRelationshipTo :: Relationship -> Neo4j Node
 getRelationshipTo rel = getNode node >>= processMaybe
     where node = relTo rel
-          processMaybe maybeNode = return $ fromMaybe (throw $ Neo4jNoEntityException (getNodePath node)) maybeNode
+          processMaybe n = return $ fromMaybe (throw $ Neo4jNoEntityException (runNodeIdentifier node)) n 
 
 -- | Delete a relationship
 deleteRelationship :: RelIdentifier a => a -> Neo4j ()
-deleteRelationship rel = Neo4j $ \conn -> httpDelete conn (getRelPath rel)
+deleteRelationship rel = Neo4j $ \conn -> httpDelete conn (runRelIdentifier rel)
 
 -- | Get all relationships for a node, if the node has disappeared it will raise an exception
 getRelationships :: Node -> Direction -> [RelationshipType] -> Neo4j [Relationship]
