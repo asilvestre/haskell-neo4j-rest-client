@@ -33,7 +33,7 @@ instance RelBatchIdentifier (BatchFuture Relationship) where
 
 -- | Create a new relationship with a type and a set of properties
 createRelationship :: (NodeBatchIdentifier a, NodeBatchIdentifier b) => RelationshipType -> Properties -> a -> b ->
-                         Batch Relationship
+                         Batch (BatchFuture Relationship)
 createRelationship t props nodefrom nodeto = nextState cmd
     where cmd = defCmd{cmdMethod = HT.methodPost, cmdPath = path, cmdBody = J.toJSON body, cmdParse = parser}
           path = getNodeBatchId nodefrom <> "/relationships"
@@ -41,27 +41,27 @@ createRelationship t props nodefrom nodeto = nextState cmd
           parser r = G.addRelationship (tryParseBody r)
 
 -- | Refresh a relationship entity with the contents in the DB
-getRelationship :: RelBatchIdentifier r => r -> Batch Relationship
+getRelationship :: RelBatchIdentifier r => r -> Batch (BatchFuture Relationship)
 getRelationship rel = nextState cmd
     where cmd = defCmd{cmdMethod = HT.methodGet, cmdPath = getRelBatchId rel, cmdBody = "", cmdParse = parser}
           parser jr = G.addRelationship (tryParseBody jr)
 
 -- | Get the "node from" from a relationship from the DB
-getRelationshipFrom :: Relationship -> Batch Node
+getRelationshipFrom :: Relationship -> Batch (BatchFuture Node)
 getRelationshipFrom rel = getNode $ relFrom rel
 
 -- | Get the "node to" from a relationship from the DB
-getRelationshipTo :: Relationship -> Batch Node
+getRelationshipTo :: Relationship -> Batch (BatchFuture Node)
 getRelationshipTo rel = getNode $ relTo rel
 
 -- | Delete a relationship
-deleteRelationship :: RelBatchIdentifier r => r -> Batch ()
+deleteRelationship :: RelBatchIdentifier r => r -> Batch (BatchFuture ())
 deleteRelationship rel = nextState cmd
     where cmd = defCmd{cmdMethod = HT.methodDelete, cmdPath = getRelBatchId rel, cmdBody = "", cmdParse = parser}
           parser jr = G.deleteRelationship (RelUrl $ tryParseFrom jr)
 
 -- | Get all relationships for a node
-getRelationships :: NodeBatchIdentifier n => n -> Direction -> [RelationshipType] -> Batch [Relationship]
+getRelationships :: NodeBatchIdentifier n => n -> Direction -> [RelationshipType] -> Batch (BatchFuture [Relationship])
 getRelationships n dir types = nextState cmd
     where cmd = defCmd{cmdMethod = HT.methodGet, cmdPath = path, cmdBody = "", cmdParse = parser}
           path = getNodeBatchId n <> "/relationships/" <> dirStr dir <> filterStr types

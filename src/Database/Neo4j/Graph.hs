@@ -4,13 +4,15 @@ module Database.Neo4j.Graph (
     Graph, empty, addNode, hasNode, hasRelationship, deleteNode, addRelationship, getOrphansFrom,
     getOrphansTo, cleanOrphanRelationships, deleteRelationship, getRelationshipNodeFrom,
     getRelationshipNodeTo, setNodeLabels, addNodeLabel, getNodeLabels, nodeFilter,
-    relationshipFilter, union, difference, intersection, getNodes, getRelationships
+    relationshipFilter, union, difference, intersection, getNodes, getRelationships,
+    setProperties, setProperty
     )where
 
+import Data.Maybe (fromMaybe)
 
-import qualified Data.ByteString as S
 import qualified Data.HashMap.Lazy as M
 import qualified Data.HashSet as HS
+import qualified Data.Text as T
 
 import Database.Neo4j.Types
 
@@ -31,6 +33,30 @@ empty = Graph {nodes = M.empty, labels = M.empty, rels = M.empty, nodeLabels = M
 -- | Add a node to the graph
 addNode :: Node -> Graph -> Graph
 addNode n g = g {nodes = M.insert (getNodePath n) n (nodes g)}
+
+-- | Set the properties of a node or relationship in the graph, if not present it won't do anything
+setProperties :: EntityIdentifier a => a -> Properties -> Graph -> Graph
+setProperties ei props g = fromMaybe g $ entity >>= return . newEntity >>= return . addEntity
+    where path = getEntityPath ei
+          entity = case path of 
+                    (EntityNodePath p) -> M.lookup p (nodes g) >>= return . entityObj
+                    (EntityRelPath p) -> M.lookup p (rels g) >>= return . entityObj
+          newEntity e = setEntityProperties e props
+          addEntity e = case e of
+                            (EntityNode n) -> g{nodes = M.insert (getNodePath n) n (nodes g)}
+                            (EntityRel r) -> g{rels = M.insert (getRelPath r) r (rels g)}
+
+-- | Set a property of a node or relationship in the graph, if not present it won't do anything
+setProperty :: EntityIdentifier a => a -> T.Text -> PropertyValue -> Graph -> Graph
+setProperty ei name value g = fromMaybe g $ entity >>= return . newEntity >>= return . addEntity
+    where path = getEntityPath ei
+          entity = case path of 
+                    (EntityNodePath p) -> M.lookup p (nodes g) >>= return . entityObj
+                    (EntityRelPath p) -> M.lookup p (rels g) >>= return . entityObj
+          newEntity e = setEntityProperties e $ M.insert name value (getEntityProperties e)
+          addEntity e = case e of
+                            (EntityNode n) -> g{nodes = M.insert (getNodePath n) n (nodes g)}
+                            (EntityRel r) -> g{rels = M.insert (getRelPath r) r (rels g)}
 
 -- | Whether a node is present in the graph
 hasNode :: NodeIdentifier a => a -> Graph -> Bool

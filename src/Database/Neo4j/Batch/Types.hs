@@ -30,7 +30,7 @@ defCmd = BatchCmd{cmdMethod = HT.methodGet, cmdPath = "", cmdBody = "", cmdParse
 
 data BatchState = BatchState {commands :: [BatchCmd], batchId :: Int}
 
-type Batch a = State BatchState (BatchFuture a)
+type Batch a = State BatchState a
 
 getCmds :: Batch a -> [BatchCmd]
 getCmds s = let (_, BatchState cmds _) = runState s (BatchState [] (-1)) in reverse cmds
@@ -57,7 +57,7 @@ tryParseFrom (J.Object jb) = let res = flip JT.parseEither jb $ \obj -> (obj .: 
                      Left e -> throw $ Neo4jParseException ("Error parsing entity: " ++ e)
 tryParseFrom _ = throw $ Neo4jParseException "Error expecting an object"
 
-nextState :: BatchCmd -> Batch a
+nextState :: BatchCmd -> Batch (BatchFuture a)
 nextState cmd = state $ \(BatchState cmds cId) ->
                                  (BatchFuture $ cId + 1, BatchState (cmd{cmdId = cId + 1} : cmds) (cId + 1))
 

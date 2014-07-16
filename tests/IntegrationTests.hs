@@ -928,10 +928,10 @@ case_batchCreateRelationships = withConnection host port $ do
                 let r1 : r2 : [] = G.getRelationships g
                 neo4jEqual (G.getRelationshipNodeFrom r1 g) (G.getRelationshipNodeTo r2 g)
                 neo4jEqual (G.getRelationshipNodeFrom r2 g) (G.getRelationshipNodeTo r1 g)
-                -- mapM_ deleteRelationship (G.getRelationships g)
                 _ <- B.runBatch $ do
-                    last $ map B.deleteRelationship (G.getRelationships g)
-                mapM_ deleteNode (G.getNodes g)
+                    mapM_ B.deleteRelationship (G.getRelationships g)
+                    mapM_ B.deleteNode (G.getNodes g)
+                return ()
 
 -- | Test batch, create and delete a relationship
 case_batchCreateDelRelationships :: Assertion
@@ -945,6 +945,38 @@ case_batchCreateDelRelationships = withConnection host port $ do
                 neo4jEqual 0 (length $ G.getRelationships g)
                 mapM_ deleteRelationship (G.getRelationships g)
                 mapM_ deleteNode (G.getNodes g)
+
+-- | Test batch getRelationshipFrom
+case_batchRelationshipNodeFrom :: Assertion
+case_batchRelationshipNodeFrom = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    B.createRelationship "type1" someOtherProperties n1 n2
+                g2 <- B.runBatch $ B.getRelationshipFrom (head $ G.getRelationships g)
+                neo4jEqual 1 (length $ G.getNodes g2)
+                neo4jEqual 0 (length $ G.getRelationships g2)
+                neo4jBool $ someProperties `elem` map getNodeProperties (G.getNodes g2)
+                _ <- B.runBatch $ do
+                    mapM_ B.deleteRelationship (G.getRelationships g)
+                    mapM_ B.deleteNode (G.getNodes g)
+                return ()
+
+-- | Test batch getRelationshipTo
+case_batchRelationshipNodeTo :: Assertion
+case_batchRelationshipNodeTo = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    B.createRelationship "type1" someOtherProperties n1 n2
+                g2 <- B.runBatch $ B.getRelationshipTo (head $ G.getRelationships g)
+                neo4jEqual 1 (length $ G.getNodes g2)
+                neo4jEqual 0 (length $ G.getRelationships g2)
+                neo4jBool $ anotherProperties `elem` map getNodeProperties (G.getNodes g2)
+                _ <- B.runBatch $ do
+                    mapM_ B.deleteRelationship (G.getRelationships g)
+                    mapM_ B.deleteNode (G.getNodes g)
+                return ()
 
 -- | Test batch, get all relationships with filter
 case_batchGetRelationships :: Assertion
@@ -964,3 +996,46 @@ case_batchGetRelationships = withConnection host port $ do
                 neo4jBool $ "type2" `elem` map getRelType (G.getRelationships g2)
                 mapM_ deleteRelationship (G.getRelationships g)
                 mapM_ deleteNode (G.getNodes g)
+
+-- | Test batch, set properties
+case_batchSetProperties :: Assertion
+case_batchSetProperties = withConnection host port $ do
+                let newProperties = M.fromList ["croqueta" |: ("2" :: T.Text)]
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    r <- B.createRelationship "type1" someOtherProperties n1 n2
+                    _ <- B.setProperties n1 newProperties
+                    B.setProperties r newProperties
+                neo4jEqual 2 (length $ G.getNodes g)
+                neo4jEqual 1 (length $ G.getRelationships g)
+                neo4jBool $ newProperties `elem` map getRelProperties (G.getRelationships g)
+                neo4jBool $ newProperties `elem` map getNodeProperties (G.getNodes g)
+                _ <- B.runBatch $ do
+                    mapM_ B.deleteRelationship (G.getRelationships g)
+                    mapM_ B.deleteNode (G.getNodes g)
+                return ()
+
+
+-- | Test batch, set property
+case_batchSetProperty :: Assertion
+case_batchSetProperty = withConnection host port $ do
+                let key = "hola"
+                let val = newval False
+                let newSomeProperties = M.insert key val someProperties
+                let newSomeOtherProperties = M.insert key val someOtherProperties
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    r <- B.createRelationship "type1" someOtherProperties n1 n2
+                    _ <- B.setProperty n1 key val
+                    B.setProperty r key val
+                liftIO $ print g
+                neo4jEqual 2 (length $ G.getNodes g)
+                neo4jEqual 1 (length $ G.getRelationships g)
+                neo4jBool $ newSomeProperties `elem` map getNodeProperties (G.getNodes g)
+                neo4jBool $ newSomeOtherProperties `elem` map getRelProperties (G.getRelationships g)
+                _ <- B.runBatch $ do
+                    mapM_ B.deleteRelationship (G.getRelationships g)
+                    mapM_ B.deleteNode (G.getNodes g)
+                return ()

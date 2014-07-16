@@ -114,12 +114,15 @@ urlMinPath :: T.Text -> T.Text
 urlMinPath url =  fromMaybe url $ T.stripPrefix "/db/data" (urlPath url)
 
 
+data EntityObj = EntityNode Node | EntityRel Relationship deriving (Eq, Show)
+
 -- | Class for top-level Neo4j entities (nodes and relationships) useful to have generic property management code
 class Entity a where
     entityPath :: a -> S.ByteString
     propertyPath :: a -> S.ByteString
     getEntityProperties :: a -> Properties
     setEntityProperties :: a -> Properties -> a
+    entityObj :: a -> EntityObj
     
 -- | Get the path for a node entity without host and port
 nodePath :: Node -> NodePath
@@ -145,6 +148,7 @@ instance Entity Node where
     propertyPath n = runNodeIdentifier n <> "/properties"
     getEntityProperties = nodeProperties
     setEntityProperties n props = n {nodeProperties = props}
+    entityObj = EntityNode
 
 nodeAPI :: S.ByteString
 nodeAPI = "/db/data/node"
@@ -211,6 +215,18 @@ instance Entity Relationship where
     propertyPath r = runRelIdentifier r <> "/properties"
     getEntityProperties = relProperties
     setEntityProperties r props = r {relProperties = props}
+    entityObj = EntityRel
+
+instance Entity EntityObj where
+    entityPath (EntityNode n) = runNodeIdentifier n
+    entityPath (EntityRel n) = runRelIdentifier n
+    propertyPath (EntityNode n) = runNodeIdentifier n <> "/properties"
+    propertyPath (EntityRel n) = runRelIdentifier n <> "/properties"
+    getEntityProperties (EntityNode n) = nodeProperties n
+    getEntityProperties (EntityRel n) = relProperties n
+    setEntityProperties (EntityNode n) props = EntityNode $ n {nodeProperties = props}
+    setEntityProperties (EntityRel n) props = EntityRel $ n {relProperties = props}
+    entityObj = id
 
 relationshipAPI :: S.ByteString
 relationshipAPI = "/db/data/relationship"
@@ -235,6 +251,33 @@ instance RelIdentifier RelUrl where
 
 runRelIdentifier :: RelIdentifier a => a -> S.ByteString
 runRelIdentifier = TE.encodeUtf8 . runRelPath . getRelPath
+
+data EntityPath = EntityRelPath RelPath | EntityNodePath NodePath deriving (Show, Eq)
+
+class EntityIdentifier a where
+    getEntityPath :: a -> EntityPath
+
+instance EntityIdentifier Node where
+    getEntityPath = EntityNodePath . getNodePath
+
+instance EntityIdentifier NodePath where
+    getEntityPath = EntityNodePath . getNodePath
+
+instance EntityIdentifier NodeUrl where
+    getEntityPath = EntityNodePath . getNodePath
+
+instance EntityIdentifier Relationship where
+    getEntityPath = EntityRelPath . getRelPath
+
+instance EntityIdentifier RelPath where
+    getEntityPath = EntityRelPath . getRelPath
+
+instance EntityIdentifier RelUrl where
+    getEntityPath = EntityRelPath . getRelPath
+
+instance EntityIdentifier T.Text where
+    getEntityPath i = (if T.count "/node" p > 0 then EntityNodePath . NodePath else EntityRelPath . RelPath) p
+        where p = urlPath i
 
 -- | Type for a label
 type Label = T.Text
