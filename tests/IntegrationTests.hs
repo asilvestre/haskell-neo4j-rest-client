@@ -341,6 +341,42 @@ case_allRelationshipProperties = withConnection host port $ do
     neo4jBool $ myRelType `elem` rs
     teardownRelTests nodeFrom nodeTo r
 
+-- | Test get the start and end of a relationship
+case_relationshipFromTo :: Assertion
+case_relationshipFromTo = withConnection host port $ do
+    (nodeFrom, nodeTo, r) <- setupRelTests
+    nfrom <- getRelationshipFrom r
+    neo4jEqual nodeFrom nfrom
+    nto <- getRelationshipTo r
+    neo4jEqual nodeTo nto
+    teardownRelTests nodeFrom nodeTo r
+
+-- | Test get the start of relationship that doesn't exist any more
+case_nonExistingRelationshipFrom :: Assertion
+case_nonExistingRelationshipFrom = do
+    (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+    let expException = Neo4jNoEntityException $ runNodeIdentifier nodeFrom
+    assertException expException $ withConnection host port $ do
+        deleteRelationship r
+        deleteNode nodeFrom
+        n <- getRelationshipFrom r
+        neo4jEqual nodeFrom n -- Doing this to force the evaluation of n (the exception is thrown after parsing)
+        return ()
+    withConnection host port $ teardownRelTests nodeFrom nodeTo r
+
+-- | Test get the end of relationship that doesn't exist any more
+case_nonExistingRelationshipTo :: Assertion
+case_nonExistingRelationshipTo = do
+    (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+    let expException = Neo4jNoEntityException $ runNodeIdentifier nodeTo
+    assertException expException $ withConnection host port $ do
+        deleteRelationship r
+        deleteNode nodeTo
+        n <- getRelationshipTo r
+        neo4jEqual nodeTo n -- Doing this to force the evaluation of n (the exception is thrown after parsing)
+        return ()
+    withConnection host port $ teardownRelTests nodeFrom nodeTo r
+
 -- | Create relationship with missing node from
 case_CreateRelationshipMissingFrom :: Assertion
 case_CreateRelationshipMissingFrom = do
@@ -873,7 +909,58 @@ case_batchCreateDeleteNode = withConnection host port $ do
                 g <- B.runBatch $ do
                         n <- B.createNode someProperties
                         B.deleteNode n
-                liftIO $ print g
                 neo4jEqual 0 (length $ G.getNodes g)
 
 -- | Test batch, create two nodes and two relationships between them
+case_batchCreateRelationships :: Assertion
+case_batchCreateRelationships = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    _ <- B.createRelationship "type1" someOtherProperties n1 n2
+                    B.createRelationship "type2" someProperties n2 n1
+                neo4jEqual 2 (length $ G.getNodes g)
+                neo4jEqual 2 (length $ G.getRelationships g)
+                neo4jBool $ someOtherProperties `elem` map getRelProperties (G.getRelationships g)
+                neo4jBool $ someProperties `elem` map getRelProperties (G.getRelationships g)
+                neo4jBool $ "type1" `elem` map getRelType (G.getRelationships g)
+                neo4jBool $ "type2" `elem` map getRelType (G.getRelationships g)
+                let r1 : r2 : [] = G.getRelationships g
+                neo4jEqual (G.getRelationshipNodeFrom r1 g) (G.getRelationshipNodeTo r2 g)
+                neo4jEqual (G.getRelationshipNodeFrom r2 g) (G.getRelationshipNodeTo r1 g)
+                -- mapM_ deleteRelationship (G.getRelationships g)
+                _ <- B.runBatch $ do
+                    last $ map B.deleteRelationship (G.getRelationships g)
+                mapM_ deleteNode (G.getNodes g)
+
+-- | Test batch, create and delete a relationship
+case_batchCreateDelRelationships :: Assertion
+case_batchCreateDelRelationships = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    r <- B.createRelationship "type1" someOtherProperties n1 n2
+                    B.deleteRelationship r
+                neo4jEqual 2 (length $ G.getNodes g)
+                neo4jEqual 0 (length $ G.getRelationships g)
+                mapM_ deleteRelationship (G.getRelationships g)
+                mapM_ deleteNode (G.getNodes g)
+
+-- | Test batch, get all relationships with filter
+case_batchGetRelationships :: Assertion
+case_batchGetRelationships = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    _ <- B.createRelationship "type1" someOtherProperties n1 n2
+                    B.createRelationship "type2" someProperties n2 n1
+                g2 <- B.runBatch $ do
+                    let n = head $ G.getNodes g
+                    B.getRelationships n Any ["type1", "type2"]
+                neo4jEqual 2 (length $ G.getRelationships g2)
+                neo4jBool $ someOtherProperties `elem` map getRelProperties (G.getRelationships g2)
+                neo4jBool $ someProperties `elem` map getRelProperties (G.getRelationships g2)
+                neo4jBool $ "type1" `elem` map getRelType (G.getRelationships g2)
+                neo4jBool $ "type2" `elem` map getRelType (G.getRelationships g2)
+                mapM_ deleteRelationship (G.getRelationships g)
+                mapM_ deleteNode (G.getNodes g)

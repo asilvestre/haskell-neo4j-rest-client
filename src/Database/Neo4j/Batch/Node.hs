@@ -45,4 +45,4 @@ getNode n = nextState cmd
 deleteNode :: NodeBatchIdentifier a => a -> Batch ()
 deleteNode n = nextState cmd
     where cmd = defCmd{cmdMethod = HT.methodDelete, cmdPath = getNodeBatchId n, cmdBody = "", cmdParse = parser}
-          parser f = G.deleteNode (NodePath (urlPath $ tryParseFrom f))
+          parser f = G.deleteNode (NodeUrl $ tryParseFrom f)

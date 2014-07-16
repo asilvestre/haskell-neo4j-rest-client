@@ -48,7 +48,6 @@ getRelationship rel = Neo4j $ \conn -> httpRetrieve conn (runRelIdentifier rel)
 
 -- | Get the "node from" from a relationship from the DB
 -- | Raises Neo4jNoEntityException if the node (and thus the relationship) does not exist any more
--- | TODO: Test
 getRelationshipFrom :: Relationship -> Neo4j Node
 getRelationshipFrom rel = getNode node >>= processMaybe
     where node = relFrom rel
@@ -56,7 +55,6 @@ getRelationshipFrom rel = getNode node >>= processMaybe
 
 -- | Get the "node to" from a relationship from the DB
 -- | Raises Neo4jNoEntityException if the node (and thus the relationship) does not exist any more
--- | TODO: Test
 getRelationshipTo :: Relationship -> Neo4j Node
 getRelationshipTo rel = getNode node >>= processMaybe
     where node = relTo rel

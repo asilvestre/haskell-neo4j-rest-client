@@ -2,9 +2,14 @@
 {-# LANGUAGE FlexibleInstances  #-}
 
 module Database.Neo4j.Batch (
+    -- * General
     Batch, runBatch,
-    createNode, getNode, deleteNode
+    -- * Nodes
+    createNode, getNode, deleteNode,
+    -- * Relationships
+    createRelationship, getRelationship, getRelationshipFrom, getRelationshipTo, deleteRelationship, getRelationships
     )where
 
 import Database.Neo4j.Batch.Node
+import Database.Neo4j.Batch.Relationship
 import Database.Neo4j.Batch.Types

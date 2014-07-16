@@ -178,14 +178,14 @@ data Direction = Outgoing | Incoming | Any
 
 -- | Get the path for a node entity without host and port
 relPath :: Relationship -> RelPath
-relPath = RelPath . urlPath . runRelUrl . relLocation
+relPath = RelPath . urlPath . runRelUrl . relUrl
 
 -- | Type for a relationship location
 newtype RelUrl = RelUrl {runRelUrl :: T.Text} deriving (Show, Eq, Generic)
 instance Hashable RelUrl
 
 -- | Type for a Neo4j relationship, has a location URI, a relationship type, a starting node and a destination node
-data Relationship = Relationship {relLocation :: RelUrl,
+data Relationship = Relationship {relUrl :: RelUrl,
                                   relType :: RelationshipType,
                                   relProperties :: Properties,
                                   relFrom :: NodeUrl,
