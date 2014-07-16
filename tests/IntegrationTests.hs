@@ -20,6 +20,8 @@ import Test.HUnit.Base hiding (Test, Node)
 --import qualified Test.HUnit as H
 
 import Database.Neo4j
+import qualified Database.Neo4j.Graph as G
+import qualified Database.Neo4j.Batch as B
 
 (<>) :: String -> String -> String
 (<>) = mappend
@@ -136,7 +138,7 @@ case_getNodeProperties = withConnection host port $ do
 case_getDeletedNodeProperties :: Assertion
 case_getDeletedNodeProperties = do
         n <- withConnection host port $ createNode someProperties
-        let expException = Neo4jNoEntityException $ nodePath n
+        let expException = Neo4jNoEntityException $ runNodeIdentifier n
         assertException expException $ withConnection host port $ do
             deleteNode n
             getProperties n
@@ -161,7 +163,7 @@ case_getNodeUnexistingProperty = withConnection host port $ do
 case_getUnexistingNodeProperty :: Assertion
 case_getUnexistingNodeProperty = do
     n <- withConnection host port $ createNode someProperties
-    let expException = Neo4jNoEntityException $ nodePath n
+    let expException = Neo4jNoEntityException $ runNodeIdentifier n
     assertException expException $ withConnection host port $ do
         deleteNode n
         _ <- getProperty n "noproperty"
@@ -172,9 +174,9 @@ case_changeNodeProperties :: Assertion
 case_changeNodeProperties = withConnection host port $ do
         n <- createNode someProperties
         newN <- setProperties n otherProperties
-        neo4jEqual otherProperties (nodeProperties newN)
+        neo4jEqual otherProperties (getNodeProperties newN)
         renewN <- getNode n
-        neo4jEqual otherProperties (nodeProperties $ fromJust renewN)
+        neo4jEqual otherProperties (getNodeProperties $ fromJust renewN)
         deleteNode newN
     where otherProperties = M.insert "newbool" (newval True) someProperties
 
@@ -182,7 +184,7 @@ case_changeNodeProperties = withConnection host port $ do
 case_changeUnexistingNodeProperties :: Assertion
 case_changeUnexistingNodeProperties = do
     n <- withConnection host port $ createNode someProperties
-    let expException = Neo4jNoEntityException $ nodePath n
+    let expException = Neo4jNoEntityException $ runNodeIdentifier n
     assertException expException $ withConnection host port $ do
         deleteNode n
         setProperties n someProperties
@@ -192,9 +194,9 @@ case_changeNodeProperty :: Assertion
 case_changeNodeProperty = withConnection host port $ do
         n <- createNode someProperties
         newN <- setProperty n otherValName otherVal
-        neo4jEqual otherProperties (nodeProperties newN)
+        neo4jEqual otherProperties (getNodeProperties newN)
         renewN <- getNode n
-        neo4jEqual otherProperties (nodeProperties $ fromJust renewN)
+        neo4jEqual otherProperties (getNodeProperties $ fromJust renewN)
         deleteNode newN
     where otherProperties = M.insert otherValName otherVal someProperties
           otherValName = "int"
@@ -205,9 +207,9 @@ case_changeNodePropertyToEmpty :: Assertion
 case_changeNodePropertyToEmpty = withConnection host port $ do
         n <- createNode someProperties
         newN <- setProperty n otherValName otherVal
-        neo4jEqual otherProperties (nodeProperties newN)
+        neo4jEqual otherProperties (getNodeProperties newN)
         renewN <- getNode n
-        neo4jEqual otherProperties (nodeProperties $ fromJust renewN)
+        neo4jEqual otherProperties (getNodeProperties $ fromJust renewN)
         deleteNode newN
     where otherProperties = M.insert otherValName otherVal someProperties
           otherValName = "intarray"
@@ -218,9 +220,9 @@ case_changeNodeUnexistingProperty :: Assertion
 case_changeNodeUnexistingProperty = withConnection host port $ do
         n <- createNode someProperties
         newN <- setProperty n otherValName otherVal
-        neo4jEqual otherProperties (nodeProperties newN)
+        neo4jEqual otherProperties (getNodeProperties newN)
         renewN <- getNode n
-        neo4jEqual otherProperties (nodeProperties $ fromJust renewN)
+        neo4jEqual otherProperties (getNodeProperties $ fromJust renewN)
         deleteNode newN
     where otherProperties = M.insert otherValName otherVal someProperties
           otherValName = "mynewbool"
@@ -230,7 +232,7 @@ case_changeNodeUnexistingProperty = withConnection host port $ do
 case_changeUnexistingNodeProperty :: Assertion
 case_changeUnexistingNodeProperty = do
     n <- withConnection host port $ createNode someProperties
-    let expException = Neo4jNoEntityException $ nodePath n
+    let expException = Neo4jNoEntityException $ runNodeIdentifier n
     assertException expException $ withConnection host port $ do
         deleteNode n
         _ <- setProperty n otherValName otherVal
@@ -243,16 +245,16 @@ case_deleteNodeProperties :: Assertion
 case_deleteNodeProperties = withConnection host port $ do
     n <- createNode someProperties
     newN <- deleteProperties n
-    neo4jEqual M.empty (nodeProperties newN)
+    neo4jEqual M.empty (getNodeProperties newN)
     renewN <- getNode n
-    neo4jEqual M.empty (nodeProperties $ fromJust renewN)
+    neo4jEqual M.empty (getNodeProperties $ fromJust renewN)
     deleteNode newN
 
 -- | Delete unexisting node properties
 case_deleteUnexistingNodeProperties :: Assertion
 case_deleteUnexistingNodeProperties = do
     n <- withConnection host port $ createNode someProperties
-    let expException = Neo4jNoEntityException $ nodePath n
+    let expException = Neo4jNoEntityException $ runNodeIdentifier n
     assertException expException $ withConnection host port $ do
         deleteNode n
         _ <- deleteProperties n
@@ -263,9 +265,9 @@ case_deleteNodeProperty :: Assertion
 case_deleteNodeProperty = withConnection host port $ do
         n <- createNode someProperties
         newN <- deleteProperty n valName
-        neo4jEqual otherProperties (nodeProperties newN)
+        neo4jEqual otherProperties (getNodeProperties newN)
         renewN <- getNode n
-        neo4jEqual otherProperties (nodeProperties $ fromJust renewN)
+        neo4jEqual otherProperties (getNodeProperties $ fromJust renewN)
         deleteNode newN
     where otherProperties = M.delete valName someProperties
           valName = "int"
@@ -275,9 +277,9 @@ case_deleteNodeUnexistingProperty :: Assertion
 case_deleteNodeUnexistingProperty = withConnection host port $ do
         n <- createNode someProperties
         newN <- deleteProperty n valName
-        neo4jEqual otherProperties (nodeProperties newN)
+        neo4jEqual otherProperties (getNodeProperties newN)
         renewN <- getNode n
-        neo4jEqual otherProperties (nodeProperties $ fromJust renewN)
+        neo4jEqual otherProperties (getNodeProperties $ fromJust renewN)
         deleteNode newN
     where otherProperties = M.delete valName someProperties
           valName = "noproperty"
@@ -286,7 +288,7 @@ case_deleteNodeUnexistingProperty = withConnection host port $ do
 case_deleteUnexistingNodeProperty :: Assertion
 case_deleteUnexistingNodeProperty = do
     n <- withConnection host port $ createNode someProperties
-    let expException = Neo4jNoEntityException $ nodePath n
+    let expException = Neo4jNoEntityException $ runNodeIdentifier n
     assertException expException $ withConnection host port $ do
         deleteNode n
         _ <- deleteProperty n valName
@@ -319,7 +321,7 @@ teardownRelTests f t r = do
 case_deleteNodeWithRelationship :: Assertion
 case_deleteNodeWithRelationship = do
     (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
-    let expException = Neo4jNonOrphanNodeDeletionException $ nodePath nodeFrom
+    let expException = Neo4jNonOrphanNodeDeletionException $ runNodeIdentifier nodeFrom
     assertException expException $ withConnection host port $ deleteNode nodeFrom
     withConnection host port $ teardownRelTests nodeFrom nodeTo r
     
@@ -339,6 +341,42 @@ case_allRelationshipProperties = withConnection host port $ do
     neo4jBool $ myRelType `elem` rs
     teardownRelTests nodeFrom nodeTo r
 
+-- | Test get the start and end of a relationship
+case_relationshipFromTo :: Assertion
+case_relationshipFromTo = withConnection host port $ do
+    (nodeFrom, nodeTo, r) <- setupRelTests
+    nfrom <- getRelationshipFrom r
+    neo4jEqual nodeFrom nfrom
+    nto <- getRelationshipTo r
+    neo4jEqual nodeTo nto
+    teardownRelTests nodeFrom nodeTo r
+
+-- | Test get the start of relationship that doesn't exist any more
+case_nonExistingRelationshipFrom :: Assertion
+case_nonExistingRelationshipFrom = do
+    (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+    let expException = Neo4jNoEntityException $ runNodeIdentifier nodeFrom
+    assertException expException $ withConnection host port $ do
+        deleteRelationship r
+        deleteNode nodeFrom
+        n <- getRelationshipFrom r
+        neo4jEqual nodeFrom n -- Doing this to force the evaluation of n (the exception is thrown after parsing)
+        return ()
+    withConnection host port $ teardownRelTests nodeFrom nodeTo r
+
+-- | Test get the end of relationship that doesn't exist any more
+case_nonExistingRelationshipTo :: Assertion
+case_nonExistingRelationshipTo = do
+    (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+    let expException = Neo4jNoEntityException $ runNodeIdentifier nodeTo
+    assertException expException $ withConnection host port $ do
+        deleteRelationship r
+        deleteNode nodeTo
+        n <- getRelationshipTo r
+        neo4jEqual nodeTo n -- Doing this to force the evaluation of n (the exception is thrown after parsing)
+        return ()
+    withConnection host port $ teardownRelTests nodeFrom nodeTo r
+
 -- | Create relationship with missing node from
 case_CreateRelationshipMissingFrom :: Assertion
 case_CreateRelationshipMissingFrom = do
@@ -346,7 +384,7 @@ case_CreateRelationshipMissingFrom = do
         nodeFrom <- createNode anotherProperties
         nodeTo <- createNode someOtherProperties
         return (nodeFrom, nodeTo)
-    let expException = Neo4jNoEntityException $ nodePath nodeFrom
+    let expException = Neo4jNoEntityException $ runNodeIdentifier nodeFrom
     assertException expException $ withConnection host port $ do
         deleteNode nodeFrom
         _ <- createRelationship myRelType someProperties nodeFrom nodeTo
@@ -360,7 +398,7 @@ case_CreateRelationshipMissingTo = do
         nodeFrom <- createNode anotherProperties
         nodeTo <- createNode someOtherProperties
         return (nodeFrom, nodeTo)
-    let expException = Neo4jNoEntityException $ nodePath nodeTo
+    let expException = Neo4jNoEntityException $ runNodeIdentifier nodeTo
     assertException expException $ withConnection host port $ do
         deleteNode nodeTo 
         _ <- createRelationship myRelType someProperties nodeFrom nodeTo
@@ -422,7 +460,7 @@ case_getRelationshipProperties = withConnection host port $ do
 case_getDeletedRelationshipProperties :: Assertion
 case_getDeletedRelationshipProperties = do
     (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
-    let expException = Neo4jNoEntityException $ relPath r
+    let expException = Neo4jNoEntityException $ runRelIdentifier r
     assertException expException $ withConnection host port $ do
         deleteRelationship r
         deleteNode nodeFrom
@@ -449,7 +487,7 @@ case_getRelationshipUnexistingProperty = withConnection host port $ do
 case_getUnexistingRelationshipProperty :: Assertion
 case_getUnexistingRelationshipProperty = do
     (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
-    let expException = Neo4jNoEntityException $ relPath r
+    let expException = Neo4jNoEntityException $ runRelIdentifier r
     assertException expException $ withConnection host port $ do
         teardownRelTests nodeFrom nodeTo r
         _ <- getProperty r "noproperty"
@@ -460,9 +498,9 @@ case_changeRelationshipProperties :: Assertion
 case_changeRelationshipProperties = withConnection host port $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         newN <- setProperties r otherProperties
-        neo4jEqual otherProperties (relProperties newN)
+        neo4jEqual otherProperties (getRelProperties newN)
         renewN <- getRelationship r
-        neo4jEqual otherProperties (relProperties $ fromJust renewN)
+        neo4jEqual otherProperties (getRelProperties $ fromJust renewN)
         teardownRelTests nodeFrom nodeTo newN
     where otherProperties = M.insert "newbool" (newval True) someProperties
 
@@ -470,7 +508,7 @@ case_changeRelationshipProperties = withConnection host port $ do
 case_changeUnexistingRelationshipProperties :: Assertion
 case_changeUnexistingRelationshipProperties = do
     (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
-    let expException = Neo4jNoEntityException $ relPath r
+    let expException = Neo4jNoEntityException $ runRelIdentifier r
     assertException expException $ withConnection host port $ do
         deleteRelationship r
         deleteNode nodeFrom
@@ -482,9 +520,9 @@ case_changeRelationshipProperty :: Assertion
 case_changeRelationshipProperty = withConnection host port $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         newN <- setProperty r otherValName otherVal
-        neo4jEqual otherProperties (relProperties newN)
+        neo4jEqual otherProperties (getRelProperties newN)
         renewN <- getRelationship r
-        neo4jEqual otherProperties (relProperties $ fromJust renewN)
+        neo4jEqual otherProperties (getRelProperties $ fromJust renewN)
         teardownRelTests nodeFrom nodeTo newN
     where otherProperties = M.insert otherValName otherVal someProperties
           otherValName = "int"
@@ -495,9 +533,9 @@ case_changeRelationshipPropertyToEmpty :: Assertion
 case_changeRelationshipPropertyToEmpty = withConnection host port $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         newN <- setProperty r otherValName otherVal
-        neo4jEqual otherProperties (relProperties newN)
+        neo4jEqual otherProperties (getRelProperties newN)
         renewN <- getRelationship r
-        neo4jEqual otherProperties (relProperties $ fromJust renewN)
+        neo4jEqual otherProperties (getRelProperties $ fromJust renewN)
         teardownRelTests nodeFrom nodeTo newN
     where otherProperties = M.insert otherValName otherVal someProperties
           otherValName = "intarray"
@@ -508,9 +546,9 @@ case_changeRelationshipUnexistingProperty :: Assertion
 case_changeRelationshipUnexistingProperty = withConnection host port $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         newN <- setProperty r otherValName otherVal
-        neo4jEqual otherProperties (relProperties newN)
+        neo4jEqual otherProperties (getRelProperties newN)
         renewN <- getRelationship r
-        neo4jEqual otherProperties (relProperties $ fromJust renewN)
+        neo4jEqual otherProperties (getRelProperties $ fromJust renewN)
         teardownRelTests nodeFrom nodeTo newN
     where otherProperties = M.insert otherValName otherVal someProperties
           otherValName = "mynewbool"
@@ -520,7 +558,7 @@ case_changeRelationshipUnexistingProperty = withConnection host port $ do
 case_changeUnexistingRelationshipProperty :: Assertion
 case_changeUnexistingRelationshipProperty = do
     (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
-    let expException = Neo4jNoEntityException $ relPath r
+    let expException = Neo4jNoEntityException $ runRelIdentifier r
     assertException expException $ withConnection host port $ do
         deleteRelationship r
         _ <- setProperty r otherValName otherVal
@@ -534,16 +572,16 @@ case_deleteRelationshipProperties :: Assertion
 case_deleteRelationshipProperties = withConnection host port $ do
     (nodeFrom, nodeTo, r) <- setupRelTests
     newN <- deleteProperties r
-    neo4jEqual M.empty (relProperties newN)
+    neo4jEqual M.empty (getRelProperties newN)
     renewN <- getRelationship r
-    neo4jEqual M.empty (relProperties $ fromJust renewN)
+    neo4jEqual M.empty (getRelProperties $ fromJust renewN)
     teardownRelTests nodeFrom nodeTo newN
 
 -- | Delete unexisting relationship properties
 case_deleteUnexistingRelationshipProperties :: Assertion
 case_deleteUnexistingRelationshipProperties = do
     (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
-    let expException = Neo4jNoEntityException $ relPath r 
+    let expException = Neo4jNoEntityException $ runRelIdentifier r 
     assertException expException $ withConnection host port $ do
         deleteRelationship r
         _ <- deleteProperties r
@@ -555,9 +593,9 @@ case_deleteRelationshipProperty :: Assertion
 case_deleteRelationshipProperty = withConnection host port $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         newN <- deleteProperty r valName
-        neo4jEqual otherProperties (relProperties newN)
+        neo4jEqual otherProperties (getRelProperties newN)
         renewN <- getRelationship r
-        neo4jEqual otherProperties (relProperties $ fromJust renewN)
+        neo4jEqual otherProperties (getRelProperties $ fromJust renewN)
         teardownRelTests nodeFrom nodeTo newN
     where otherProperties = M.delete valName someProperties
           valName = "int"
@@ -567,9 +605,9 @@ case_deleteRelationshipUnexistingProperty :: Assertion
 case_deleteRelationshipUnexistingProperty = withConnection host port $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         newN <- deleteProperty r valName
-        neo4jEqual otherProperties (relProperties newN)
+        neo4jEqual otherProperties (getRelProperties newN)
         renewN <- getRelationship r
-        neo4jEqual otherProperties (relProperties $ fromJust renewN)
+        neo4jEqual otherProperties (getRelProperties $ fromJust renewN)
         teardownRelTests nodeFrom nodeTo newN
     where otherProperties = M.delete valName someProperties
           valName = "noproperty"
@@ -578,7 +616,7 @@ case_deleteRelationshipUnexistingProperty = withConnection host port $ do
 case_deleteUnexistingRelationshipProperty :: Assertion
 case_deleteUnexistingRelationshipProperty = do
         (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
-        let expException = Neo4jNoEntityException $ relPath r 
+        let expException = Neo4jNoEntityException $ runRelIdentifier r 
         assertException expException $ withConnection host port $ do
             deleteRelationship r
             _ <- deleteProperty r valName
@@ -610,7 +648,7 @@ case_GetNodeRelationships = withConnection host port $ do
 case_GetUnexistingNodeRelationships :: Assertion
 case_GetUnexistingNodeRelationships = do
         (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
-        let expException = Neo4jNoEntityException $ nodePath nodeFrom
+        let expException = Neo4jNoEntityException $ runNodeIdentifier nodeFrom
         assertException expException $ withConnection host port $ do
             teardownRelTests nodeFrom nodeTo r
             _ <- getRelationships nodeFrom Any []
@@ -684,7 +722,7 @@ case_getNodeLabelsWithNone = withConnection host port $ do
 case_getUnexistingNodeLabels :: Assertion
 case_getUnexistingNodeLabels = do
     n <- withConnection host port $ createNode someProperties
-    let expException = Neo4jNoEntityException $ nodePath n
+    let expException = Neo4jNoEntityException $ runNodeIdentifier n
     assertException expException $ withConnection host port $ do
         deleteNode n
         _ <- getLabels n
@@ -708,7 +746,7 @@ case_getAddAndGetNodeLabels = withConnection host port $ do
 case_addUnexistingNodeLabels :: Assertion
 case_addUnexistingNodeLabels = do 
     n <- withConnection host port $ createNode someProperties
-    let expException = Neo4jNoEntityException $ nodePath n
+    let expException = Neo4jNoEntityException $ runNodeIdentifier n
     assertException expException $ withConnection host port $ do
         deleteNode n
         addLabels ["mylabel"] n
@@ -742,7 +780,7 @@ case_changeNodeLabelsToEmpty = withConnection host port $ do
 case_changeUnexistingNodeLabels :: Assertion
 case_changeUnexistingNodeLabels = do 
     n <- withConnection host port $ createNode someProperties
-    let expException = Neo4jNoEntityException $ nodePath n
+    let expException = Neo4jNoEntityException $ runNodeIdentifier n
     assertException expException $ withConnection host port $ do
         deleteNode n
         changeLabels ["mylabel"] n
@@ -774,7 +812,7 @@ case_removeNodeUnexistingLabel = withConnection host port $ do
 case_removeUnexistingNodeLabel :: Assertion
 case_removeUnexistingNodeLabel = do 
     n <- withConnection host port $ createNode someProperties
-    let expException = Neo4jNoEntityException $ nodePath n
+    let expException = Neo4jNoEntityException $ runNodeIdentifier n
     assertException expException $ withConnection host port $ do
         deleteNode n
         removeLabel "mylabel" n
@@ -843,3 +881,161 @@ case_createGetDropIndex = withConnection host port $ do
           lbl2 = "mylabel2"
           prop1 = "myprop"
           prop2 = "myprop2"
+
+-- | Test batch, create a node and get it again
+case_batchCreateGetNode :: Assertion
+case_batchCreateGetNode = withConnection host port $ do
+                g <- B.runBatch $ do
+                        n <- B.createNode someProperties
+                        B.getNode n
+                neo4jEqual 1 (length $ G.getNodes g)
+                neo4jBool $ someProperties `elem` map getNodeProperties (G.getNodes g)
+                deleteNode (head $ G.getNodes g)
+
+-- | Test batch, create two nodes in a batch
+case_batchCreate2Nodes :: Assertion
+case_batchCreate2Nodes = withConnection host port $ do
+                g <- B.runBatch $ do
+                        _ <- B.createNode someProperties
+                        B.createNode anotherProperties
+                neo4jEqual 2 (length $ G.getNodes g)
+                neo4jBool $ someProperties `elem` map getNodeProperties (G.getNodes g)
+                neo4jBool $ anotherProperties `elem` map getNodeProperties (G.getNodes g)
+                mapM_ deleteNode (G.getNodes g)
+
+-- | Test batch, create and delete
+case_batchCreateDeleteNode :: Assertion
+case_batchCreateDeleteNode = withConnection host port $ do
+                g <- B.runBatch $ do
+                        n <- B.createNode someProperties
+                        B.deleteNode n
+                neo4jEqual 0 (length $ G.getNodes g)
+
+-- | Test batch, create two nodes and two relationships between them
+case_batchCreateRelationships :: Assertion
+case_batchCreateRelationships = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    _ <- B.createRelationship "type1" someOtherProperties n1 n2
+                    B.createRelationship "type2" someProperties n2 n1
+                neo4jEqual 2 (length $ G.getNodes g)
+                neo4jEqual 2 (length $ G.getRelationships g)
+                neo4jBool $ someOtherProperties `elem` map getRelProperties (G.getRelationships g)
+                neo4jBool $ someProperties `elem` map getRelProperties (G.getRelationships g)
+                neo4jBool $ "type1" `elem` map getRelType (G.getRelationships g)
+                neo4jBool $ "type2" `elem` map getRelType (G.getRelationships g)
+                let r1 : r2 : [] = G.getRelationships g
+                neo4jEqual (G.getRelationshipNodeFrom r1 g) (G.getRelationshipNodeTo r2 g)
+                neo4jEqual (G.getRelationshipNodeFrom r2 g) (G.getRelationshipNodeTo r1 g)
+                _ <- B.runBatch $ do
+                    mapM_ B.deleteRelationship (G.getRelationships g)
+                    mapM_ B.deleteNode (G.getNodes g)
+                return ()
+
+-- | Test batch, create and delete a relationship
+case_batchCreateDelRelationships :: Assertion
+case_batchCreateDelRelationships = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    r <- B.createRelationship "type1" someOtherProperties n1 n2
+                    B.deleteRelationship r
+                neo4jEqual 2 (length $ G.getNodes g)
+                neo4jEqual 0 (length $ G.getRelationships g)
+                mapM_ deleteRelationship (G.getRelationships g)
+                mapM_ deleteNode (G.getNodes g)
+
+-- | Test batch getRelationshipFrom
+case_batchRelationshipNodeFrom :: Assertion
+case_batchRelationshipNodeFrom = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    B.createRelationship "type1" someOtherProperties n1 n2
+                g2 <- B.runBatch $ B.getRelationshipFrom (head $ G.getRelationships g)
+                neo4jEqual 1 (length $ G.getNodes g2)
+                neo4jEqual 0 (length $ G.getRelationships g2)
+                neo4jBool $ someProperties `elem` map getNodeProperties (G.getNodes g2)
+                _ <- B.runBatch $ do
+                    mapM_ B.deleteRelationship (G.getRelationships g)
+                    mapM_ B.deleteNode (G.getNodes g)
+                return ()
+
+-- | Test batch getRelationshipTo
+case_batchRelationshipNodeTo :: Assertion
+case_batchRelationshipNodeTo = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    B.createRelationship "type1" someOtherProperties n1 n2
+                g2 <- B.runBatch $ B.getRelationshipTo (head $ G.getRelationships g)
+                neo4jEqual 1 (length $ G.getNodes g2)
+                neo4jEqual 0 (length $ G.getRelationships g2)
+                neo4jBool $ anotherProperties `elem` map getNodeProperties (G.getNodes g2)
+                _ <- B.runBatch $ do
+                    mapM_ B.deleteRelationship (G.getRelationships g)
+                    mapM_ B.deleteNode (G.getNodes g)
+                return ()
+
+-- | Test batch, get all relationships with filter
+case_batchGetRelationships :: Assertion
+case_batchGetRelationships = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    _ <- B.createRelationship "type1" someOtherProperties n1 n2
+                    B.createRelationship "type2" someProperties n2 n1
+                g2 <- B.runBatch $ do
+                    let n = head $ G.getNodes g
+                    B.getRelationships n Any ["type1", "type2"]
+                neo4jEqual 2 (length $ G.getRelationships g2)
+                neo4jBool $ someOtherProperties `elem` map getRelProperties (G.getRelationships g2)
+                neo4jBool $ someProperties `elem` map getRelProperties (G.getRelationships g2)
+                neo4jBool $ "type1" `elem` map getRelType (G.getRelationships g2)
+                neo4jBool $ "type2" `elem` map getRelType (G.getRelationships g2)
+                mapM_ deleteRelationship (G.getRelationships g)
+                mapM_ deleteNode (G.getNodes g)
+
+-- | Test batch, set properties
+case_batchSetProperties :: Assertion
+case_batchSetProperties = withConnection host port $ do
+                let newProperties = M.fromList ["croqueta" |: ("2" :: T.Text)]
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    r <- B.createRelationship "type1" someOtherProperties n1 n2
+                    _ <- B.setProperties n1 newProperties
+                    B.setProperties r newProperties
+                neo4jEqual 2 (length $ G.getNodes g)
+                neo4jEqual 1 (length $ G.getRelationships g)
+                neo4jBool $ newProperties `elem` map getRelProperties (G.getRelationships g)
+                neo4jBool $ newProperties `elem` map getNodeProperties (G.getNodes g)
+                _ <- B.runBatch $ do
+                    mapM_ B.deleteRelationship (G.getRelationships g)
+                    mapM_ B.deleteNode (G.getNodes g)
+                return ()
+
+
+-- | Test batch, set property
+case_batchSetProperty :: Assertion
+case_batchSetProperty = withConnection host port $ do
+                let key = "hola"
+                let val = newval False
+                let newSomeProperties = M.insert key val someProperties
+                let newSomeOtherProperties = M.insert key val someOtherProperties
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    r <- B.createRelationship "type1" someOtherProperties n1 n2
+                    _ <- B.setProperty n1 key val
+                    B.setProperty r key val
+                liftIO $ print g
+                neo4jEqual 2 (length $ G.getNodes g)
+                neo4jEqual 1 (length $ G.getRelationships g)
+                neo4jBool $ newSomeProperties `elem` map getNodeProperties (G.getNodes g)
+                neo4jBool $ newSomeOtherProperties `elem` map getRelProperties (G.getRelationships g)
+                _ <- B.runBatch $ do
+                    mapM_ B.deleteRelationship (G.getRelationships g)
+                    mapM_ B.deleteNode (G.getNodes g)
+                return ()
