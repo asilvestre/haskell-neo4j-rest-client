@@ -20,6 +20,7 @@ import GHC.Generics (Generic)
 import Data.Aeson ((.:))
 import qualified Data.Aeson as J
 import qualified Data.ByteString as S
+import qualified Data.ByteString.Lazy as L
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Scientific as Sci
 import qualified Data.Text as T
@@ -295,6 +296,8 @@ data Neo4jException = Neo4jHttpException String |
                       Neo4jNonOrphanNodeDeletionException S.ByteString |
                       Neo4jNoEntityException S.ByteString |
                       Neo4jUnexpectedResponseException HT.Status |
+                      Neo4jNoSuchProperty T.Text |
+                      Neo4jBatchException L.ByteString |
                       Neo4jParseException String deriving (Show, Typeable, Eq)
 instance Exception Neo4jException
 

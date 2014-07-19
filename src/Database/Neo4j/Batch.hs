@@ -9,7 +9,7 @@ module Database.Neo4j.Batch (
     -- * Relationships
     createRelationship, getRelationship, getRelationshipFrom, getRelationshipTo, deleteRelationship, getRelationships,
     -- * Properties
-    setProperties, setProperty
+    setProperties, setProperty, deleteProperties, deleteProperty
     )where
 
 import Database.Neo4j.Batch.Node

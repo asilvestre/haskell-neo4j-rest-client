@@ -3,13 +3,14 @@
 module Main where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.Monoid (mappend)
+import Data.Monoid (Monoid, mappend)
 import Data.Int (Int64)
 import Data.Maybe (fromJust)
 
 import qualified Data.ByteString as S
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
 
 import Control.Exception (handle)
 import Test.Framework.TH (defaultMainGenerator)
@@ -23,7 +24,7 @@ import Database.Neo4j
 import qualified Database.Neo4j.Graph as G
 import qualified Database.Neo4j.Batch as B
 
-(<>) :: String -> String -> String
+(<>) :: Monoid a => a -> a -> a
 (<>) = mappend
 
 -- Get the string of a exception raised by an action
@@ -1030,7 +1031,6 @@ case_batchSetProperty = withConnection host port $ do
                     r <- B.createRelationship "type1" someOtherProperties n1 n2
                     _ <- B.setProperty n1 key val
                     B.setProperty r key val
-                liftIO $ print g
                 neo4jEqual 2 (length $ G.getNodes g)
                 neo4jEqual 1 (length $ G.getRelationships g)
                 neo4jBool $ newSomeProperties `elem` map getNodeProperties (G.getNodes g)
@@ -1039,3 +1039,53 @@ case_batchSetProperty = withConnection host port $ do
                     mapM_ B.deleteRelationship (G.getRelationships g)
                     mapM_ B.deleteNode (G.getNodes g)
                 return ()
+
+-- | Test batch, delete properties
+case_batchDeleteProperties :: Assertion
+case_batchDeleteProperties = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    r <- B.createRelationship "type1" someOtherProperties n1 n2
+                    _ <- B.deleteProperties n1
+                    B.deleteProperties r
+                neo4jEqual 2 (length $ G.getNodes g)
+                neo4jEqual 1 (length $ G.getRelationships g)
+                neo4jBool $ emptyProperties `elem` map getRelProperties (G.getRelationships g)
+                neo4jBool $ emptyProperties `elem` map getNodeProperties (G.getNodes g)
+                _ <- B.runBatch $ do
+                    mapM_ B.deleteRelationship (G.getRelationships g)
+                    mapM_ B.deleteNode (G.getNodes g)
+                return ()
+
+-- | Test batch, delete property
+case_batchDeleteProperty :: Assertion
+case_batchDeleteProperty= withConnection host port $ do
+                let key = "mytext"
+                let newSomeProperties = M.delete key someProperties
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    r <- B.createRelationship "type1" someProperties n1 n2
+                    _ <- B.deleteProperty n1 key
+                    B.deleteProperty r key
+                neo4jEqual 2 (length $ G.getNodes g)
+                neo4jEqual 1 (length $ G.getRelationships g)
+                neo4jBool $ newSomeProperties `elem` map getNodeProperties (G.getNodes g)
+                neo4jBool $ newSomeProperties `elem` map getRelProperties (G.getRelationships g)
+                _ <- B.runBatch $ do
+                    mapM_ B.deleteRelationship (G.getRelationships g)
+                    mapM_ B.deleteNode (G.getNodes g)
+                return ()
+
+-- | Test batch, delete an unknown property, it should raise an exception
+case_batchDeleteUnknownProperty :: Assertion
+case_batchDeleteUnknownProperty= do
+        n <- withConnection host port $ createNode someProperties
+        let excMsg = "Node[" <> TE.decodeUtf8 (nodeId n) <>"] does not have a property \"" <> prop <> "\""
+        let expException = Neo4jNoSuchProperty excMsg
+        assertException expException $ withConnection host port $ do
+                    g <- B.runBatch $ B.deleteProperty n prop
+                    neo4jEqual G.empty g -- Doing this to force evaluation
+        withConnection host port $ deleteNode n
+    where prop = "noprop" :: T.Text

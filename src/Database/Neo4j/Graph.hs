@@ -3,9 +3,9 @@
 module Database.Neo4j.Graph (
     Graph, empty, addNode, hasNode, hasRelationship, deleteNode, addRelationship, getOrphansFrom,
     getOrphansTo, cleanOrphanRelationships, deleteRelationship, getRelationshipNodeFrom,
-    getRelationshipNodeTo, setNodeLabels, addNodeLabel, getNodeLabels, nodeFilter,
+    getRelationshipNodeTo, setNodeLabels, addNodeLabel, getNodeLabels, deleteNodeLabel, nodeFilter,
     relationshipFilter, union, difference, intersection, getNodes, getRelationships,
-    setProperties, setProperty
+    setProperties, setProperty, deleteProperties, deleteProperty
     )where
 
 import Data.Maybe (fromMaybe)
@@ -54,6 +54,30 @@ setProperty ei name value g = fromMaybe g $ entity >>= return . newEntity >>= re
                     (EntityNodePath p) -> M.lookup p (nodes g) >>= return . entityObj
                     (EntityRelPath p) -> M.lookup p (rels g) >>= return . entityObj
           newEntity e = setEntityProperties e $ M.insert name value (getEntityProperties e)
+          addEntity e = case e of
+                            (EntityNode n) -> g{nodes = M.insert (getNodePath n) n (nodes g)}
+                            (EntityRel r) -> g{rels = M.insert (getRelPath r) r (rels g)}
+
+-- | Delete all the properties of a node or relationship, if the entity is not present it won't do anything
+deleteProperties :: EntityIdentifier a => a -> Graph -> Graph
+deleteProperties ei g = fromMaybe g $ entity >>= return . newEntity >>= return . addEntity
+    where path = getEntityPath ei
+          entity = case path of 
+                    (EntityNodePath p) -> M.lookup p (nodes g) >>= return . entityObj
+                    (EntityRelPath p) -> M.lookup p (rels g) >>= return . entityObj
+          newEntity e = setEntityProperties e emptyProperties
+          addEntity e = case e of
+                            (EntityNode n) -> g{nodes = M.insert (getNodePath n) n (nodes g)}
+                            (EntityRel r) -> g{rels = M.insert (getRelPath r) r (rels g)}
+
+-- | Delete a property of a node or relationship, if the entity is not present it won't do anything
+deleteProperty :: EntityIdentifier a => a -> T.Text -> Graph -> Graph
+deleteProperty ei key g = fromMaybe g $ entity >>= return . newEntity >>= return . addEntity
+    where path = getEntityPath ei
+          entity = case path of 
+                    (EntityNodePath p) -> M.lookup p (nodes g) >>= return . entityObj
+                    (EntityRelPath p) -> M.lookup p (rels g) >>= return . entityObj
+          newEntity e = setEntityProperties e $ M.delete key (getEntityProperties e)
           addEntity e = case e of
                             (EntityNode n) -> g{nodes = M.insert (getNodePath n) n (nodes g)}
                             (EntityRel r) -> g{rels = M.insert (getRelPath r) r (rels g)}
@@ -115,14 +139,14 @@ getRelationshipNodeTo :: Relationship -> Graph -> Maybe Node
 getRelationshipNodeTo r g = M.lookup (getNodePath (relTo r)) (nodes g)
 
 -- | Set what labels a node has
-setNodeLabels :: Node -> [Label] -> Graph -> Graph
+setNodeLabels :: NodeIdentifier a => a -> [Label] -> Graph -> Graph
 setNodeLabels n lbls g = g {nodeLabels = M.insert (getNodePath n) (HS.fromList lbls) (nodeLabels g),
                             labels = insertLabels lbls (labels g)}
     where insertLabels xs acc = foldl (\accum x -> M.insertWith HS.union x defaultNodeSet accum) acc xs
           defaultNodeSet = HS.singleton $ getNodePath n
 
 -- | Add a label to a node
-addNodeLabel :: Node -> Label -> Graph -> Graph
+addNodeLabel :: NodeIdentifier a => a -> Label -> Graph -> Graph
 addNodeLabel n lbl g = g {nodeLabels = M.insertWith HS.union locationForNode (HS.singleton lbl) nodeLabelIndex,
                             labels = M.insertWith HS.union lbl (HS.singleton locationForNode) labelNodeIndex}
     where locationForNode = getNodePath n
@@ -130,8 +154,19 @@ addNodeLabel n lbl g = g {nodeLabels = M.insertWith HS.union locationForNode (HS
           labelNodeIndex = labels g
 
 -- | Get the labels of a node
-getNodeLabels :: Node -> Graph -> LabelSet
+getNodeLabels :: NodeIdentifier a => a -> Graph -> LabelSet
 getNodeLabels n g = let loc = getNodePath n in M.lookupDefault HS.empty loc (nodeLabels g)
+
+-- | Remove a label from a node
+deleteNodeLabel :: NodeIdentifier a => a -> Label -> Graph -> Graph
+deleteNodeLabel n lbl g = g {nodeLabels = M.insertWith nodeLabelIndexOp locationForNode (HS.empty) nodeLabelIndex,
+                            labels = M.insertWith labelNodeIndexOp lbl (HS.empty) labelNodeIndex}
+    where locationForNode = getNodePath n
+          nodeLabelIndex = nodeLabels g
+          nodeLabelIndexOp = const $ HS.delete lbl
+          labelNodeIndex = labels g
+          labelNodeIndexOp = const $ HS.delete locationForNode
+          
 
 -- | Filter the nodes of a graph
 nodeFilter :: (Node -> Bool) -> Graph -> Graph

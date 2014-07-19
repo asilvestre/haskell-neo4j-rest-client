@@ -5,10 +5,12 @@ module Database.Neo4j.Batch.Types where
 
 import Control.Exception.Base (throw)
 import Data.Aeson ((.=), (.:))
+import Data.Maybe (fromMaybe)
 import Control.Monad.State (state, State, runState)
 
 import qualified Data.Aeson as J
 import qualified Data.Aeson.Types as JT
+import qualified Data.ByteString.Lazy as L
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
@@ -67,7 +69,28 @@ parseBatchResponse jarr b = foldl (flip ($)) empty appliedParsers
           parsers = foldr (\cmd ps -> cmdParse cmd : ps) [] cmds
           appliedParsers = zipWith ($) parsers (V.toList jarr)
 
+-- | Get teh exception type for a given batch exception message, if nothing is found a default exception is given
+exceptionByName :: Neo4jException -> T.Text -> T.Text -> Neo4jException
+exceptionByName _ "NoSuchPropertyException" msg = Neo4jNoSuchProperty msg
+exceptionByName def _ _ = def
+
+-- | Parse batch exceptions
+parseException :: L.ByteString -> Neo4jException
+parseException b = fromMaybe defaultException $ do
+                    parsedobj <- J.decode b
+                    msg <- flip JT.parseMaybe parsedobj $ \obj -> (obj .: "message") >>= J.parseJSON 
+                    parsedmsg <- J.decode (L.fromStrict $ TE.encodeUtf8 msg)
+                    (errName, expl) <- flip JT.parseMaybe parsedmsg $ \obj -> do
+                                                                        expl <- obj .: "message"
+                                                                        errName <- obj .: "exception"
+                                                                        return (errName, expl)
+                    return $ exceptionByName defaultException errName expl
+    where defaultException = Neo4jBatchException b
+
 runBatch :: Batch a -> Neo4j Graph
 runBatch b = Neo4j $ \conn -> do
-        arr <- httpCreate conn "/db/data/batch" $ J.encode b
+        res <- httpCreate500Explained conn "/db/data/batch" $ J.encode b
+        let arr = case res of
+                    Left bodyErr -> throw $ parseException bodyErr
+                    Right bodySuc -> bodySuc
         return $ parseBatchResponse arr b

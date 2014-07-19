@@ -61,3 +61,18 @@ setProperty e name value = nextState cmd
           pathsuffix = "/properties/" <> name
           parser :: J.Value -> G.Graph -> G.Graph
           parser f = G.setProperty (parsePropertiesPath f pathsuffix) name value
+
+-- | Delete all relationship/node properties
+deleteProperties :: BatchEntity a => a -> Batch (BatchFuture ())
+deleteProperties e = nextState cmd
+    where cmd = defCmd{cmdMethod = HT.methodDelete, cmdPath = path, cmdBody = "", cmdParse = parser}
+          path = getEntityBatchId e <> "/properties"
+          parser f = G.deleteProperties (parsePropertiesPath f "/properties")
+
+-- | Delete a relationship/node property
+deleteProperty :: BatchEntity a => a -> T.Text -> Batch (BatchFuture ())
+deleteProperty e key = nextState cmd
+    where cmd = defCmd{cmdMethod = HT.methodDelete, cmdPath = path, cmdBody = "", cmdParse = parser}
+          path = getEntityBatchId e <> pathsuffix
+          pathsuffix = "/properties/" <> key
+          parser f = G.deleteProperty (parsePropertiesPath f pathsuffix) key
