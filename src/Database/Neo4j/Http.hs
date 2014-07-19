@@ -3,13 +3,12 @@
 module Database.Neo4j.Http where
 
 import Control.Exception.Base (Exception, throw, catch, toException)
-import Control.Monad (join)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Resource (runResourceT, ResourceT)
 import Data.Default (def)
 import Data.Maybe (fromMaybe)
 
-import Data.Aeson ((.:?))
+import Data.Aeson ((.:))
 import Data.Aeson.Types (parseMaybe)
 
 import qualified Data.Aeson as J
@@ -57,9 +56,9 @@ httpReq (Connection h p m) method path body statusCheck = do
 
 -- | Extracts the exception description from a HTTP Neo4j response if the status code matches otherwise Nothing
 extractException :: HC.Response L.ByteString -> T.Text
-extractException resp = fromMaybe "" $ join $ do
+extractException resp = fromMaybe "" $ do
                 resobj <- J.decode $ HC.responseBody resp
-                flip parseMaybe resobj $ \obj -> obj .:? "exception"
+                flip parseMaybe resobj $ \obj -> obj .: "exception"
 
 -- | Launch a POST request, this will raise an exception if 201 or 204 is not received
 httpCreate :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString -> ResourceT IO a
@@ -68,6 +67,18 @@ httpCreate conn path body = do
             let resBody = J.eitherDecode $ HC.responseBody res
             return $ case resBody of
                         Right entity -> entity
+                        Left e -> throw $ Neo4jParseException ("Error parsing created entity: " ++ e)
+
+-- | Launch a POST request, this will raise an exception if 201 or 204 is not received, explain 500
+httpCreate500Explained :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString ->
+                                             ResourceT IO (Either L.ByteString a)
+httpCreate500Explained conn path body = do
+            res <- httpReq conn HT.methodPost path body (`elem` [HT.status200, HT.status201, HT.status500])
+            let status = HC.responseStatus res
+            let resBody = HC.responseBody res
+            return $ if status == HT.status500 then Left resBody else parseBody resBody
+        where parseBody b = case J.eitherDecode b of
+                        Right entity -> Right entity
                         Left e -> throw $ Neo4jParseException ("Error parsing created entity: " ++ e)
 
 -- | Launch a POST request, this will raise an exception if 201 or 204 is not received
