@@ -9,16 +9,14 @@ import Data.Maybe (fromJust)
 
 import qualified Data.ByteString as S
 import qualified Data.HashMap.Lazy as M
+import qualified Data.HashSet as HS
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 
 import Control.Exception (handle)
 import Test.Framework.TH (defaultMainGenerator)
 import Test.Framework.Providers.HUnit (testCase)
---import Test.Framework.Providers.QuickCheck2
 import Test.HUnit.Base hiding (Test, Node)
---import Test.QuickCheck
---import qualified Test.HUnit as H
 
 import Database.Neo4j
 import qualified Database.Neo4j.Graph as G
@@ -1089,3 +1087,91 @@ case_batchDeleteUnknownProperty= do
                     neo4jEqual G.empty g -- Doing this to force evaluation
         withConnection host port $ deleteNode n
     where prop = "noprop" :: T.Text
+
+-- | Test batch, set add labels
+case_batchAddLabels :: Assertion
+case_batchAddLabels = withConnection host port $ do
+                let label1 = "label1"
+                let label2 = "label2"
+                let label3 = "label3"
+                let labelset = HS.fromList [label1, label2, label3]
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    _ <- B.createNode anotherProperties
+                    _ <- B.addLabels [label1, label2] n1
+                    B.addLabels [label3] n1
+                neo4jEqual 2 (length $ G.getNodes g)
+                neo4jBool $ labelset `elem` map (`G.getNodeLabels` g) (G.getNodes g)
+                neo4jBool $ HS.empty `elem` map (`G.getNodeLabels` g) (G.getNodes g)
+                _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes g)
+                return ()
+
+-- | Test batch, change labels
+case_batchChangeLabels :: Assertion
+case_batchChangeLabels = withConnection host port $ do
+                let label1 = "label1"
+                let label2 = "label2"
+                let label3 = "label3"
+                let labelset = HS.fromList [label2]
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    _ <- B.addLabels [label1, label2, label3] n1
+                    B.changeLabels [label2] n1
+                neo4jBool $ labelset `elem` map (`G.getNodeLabels` g) (G.getNodes g)
+                _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes g)
+                return ()
+
+-- | Test batch, remove label
+case_batchRemoveLabel :: Assertion
+case_batchRemoveLabel = withConnection host port $ do
+                let label1 = "label1"
+                let label2 = "label2"
+                let label3 = "label3"
+                let labelset = HS.fromList [label2, label3]
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    _ <- B.addLabels [label1, label2, label3] n1
+                    B.removeLabel label1 n1
+                neo4jBool $ labelset `elem` map (`G.getNodeLabels` g) (G.getNodes g)
+                _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes g)
+                return ()
+
+-- | Test batch, get all nodes with a label
+case_batchAllNodesWithLabel :: Assertion
+case_batchAllNodesWithLabel = withConnection host port $ do
+        gp <- B.runBatch $ do
+            n1 <- B.createNode someProperties
+            n2 <- B.createNode someProperties
+            n3 <- B.createNode someProperties
+            _ <- B.addLabels [lbl1, lbl2] n1
+            _ <- B.addLabels [lbl2] n2
+            B.addLabels [lbl1] n3
+        g <- B.runBatch $ B.getNodesByLabelAndProperty lbl1 Nothing
+        neo4jEqual 2 (length $ G.getNodes g)
+        neo4jBool $ all (`elem` G.getNodes gp) (G.getNodes g)
+        gempty <- B.runBatch $ B.getNodesByLabelAndProperty "nolbl" Nothing
+        neo4jEqual [] (G.getNodes gempty)
+        _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
+        return ()
+    where lbl1 = "la21bl1"
+          lbl2 = "la21bl2"
+
+-- | Test batch, get all nodes with a label and a property
+case_batchAllNodesWithLabelAndProperty :: Assertion
+case_batchAllNodesWithLabelAndProperty = withConnection host port $ do
+        gp <- B.runBatch $ do
+            n1 <- B.createNode someProperties
+            n2 <- B.createNode someProperties
+            n3 <- B.createNode anotherProperties
+            _ <- B.addLabels [lbl1, lbl2] n1
+            _ <- B.addLabels [lbl2] n2
+            B.addLabels [lbl1] n3
+        g <- B.runBatch $ B.getNodesByLabelAndProperty lbl1 $ Just ("doublearray", newval [0.1, -12.23 :: Double])
+        neo4jEqual 1 (length $ G.getNodes g)
+        neo4jBool $ all (`elem` G.getNodes gp) (G.getNodes g)
+        g2 <- B.runBatch $ B.getNodesByLabelAndProperty lbl1 $ Just ("doublearray", newval [0.1, -12.22 :: Double])
+        neo4jEqual [] (G.getNodes g2)
+        _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
+        return ()
+    where lbl1 = "lbl1"
+          lbl2 = "lbl2"

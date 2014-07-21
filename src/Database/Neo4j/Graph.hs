@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
 
 module Database.Neo4j.Graph (
-    Graph, empty, addNode, hasNode, hasRelationship, deleteNode, addRelationship, getOrphansFrom,
+    Graph, LabelSet, empty, addNode, hasNode, hasRelationship, deleteNode, addRelationship, getOrphansFrom,
     getOrphansTo, cleanOrphanRelationships, deleteRelationship, getRelationshipNodeFrom,
     getRelationshipNodeTo, setNodeLabels, addNodeLabel, getNodeLabels, deleteNodeLabel, nodeFilter,
     relationshipFilter, union, difference, intersection, getNodes, getRelationships,
@@ -159,8 +159,8 @@ getNodeLabels n g = let loc = getNodePath n in M.lookupDefault HS.empty loc (nod
 
 -- | Remove a label from a node
 deleteNodeLabel :: NodeIdentifier a => a -> Label -> Graph -> Graph
-deleteNodeLabel n lbl g = g {nodeLabels = M.insertWith nodeLabelIndexOp locationForNode (HS.empty) nodeLabelIndex,
-                            labels = M.insertWith labelNodeIndexOp lbl (HS.empty) labelNodeIndex}
+deleteNodeLabel n lbl g = g {nodeLabels = M.insertWith nodeLabelIndexOp locationForNode HS.empty nodeLabelIndex,
+                            labels = M.insertWith labelNodeIndexOp lbl HS.empty labelNodeIndex}
     where locationForNode = getNodePath n
           nodeLabelIndex = nodeLabels g
           nodeLabelIndexOp = const $ HS.delete lbl

@@ -44,7 +44,7 @@ instance BatchEntity (BatchFuture Relationship) where
     getEntityBatchId = getRelBatchId
 
 parsePropertiesPath :: J.Value -> T.Text -> T.Text
-parsePropertiesPath j suf = let p = tryParseFrom j in fromMaybe p $ T.stripSuffix suf (tryParseFrom j)
+parsePropertiesPath j suf = let p = tryParseFrom j in fromMaybe p $ T.stripSuffix suf p
 
 -- | Set all relationship/node properties
 setProperties :: BatchEntity a => a -> Properties -> Batch (BatchFuture ())
