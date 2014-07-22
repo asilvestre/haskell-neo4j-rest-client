@@ -1,11 +1,30 @@
 {-# LANGUAGE OverloadedStrings  #-}
 
+-- | Module to handle 'Graph' objects. These have information about a group of nodes, relationships,
+--  and information about labels per node and nodes per label.
+--  'Graph' objects for now are returned by "Database.Neo4j.Batch" operations and in the future hopefully after
+--  adding cypher support they will be part of their result
+--  Notice a graph can have relationships and at the same time not have some of the nodes of those
+--  relationships, see the section called handling orphaned relationships. This is so because commands in a batch
+--  might retrieve relationships but might not create or retrieve their respective nodes.
 module Database.Neo4j.Graph (
-    Graph, LabelSet, empty, addNode, hasNode, hasRelationship, deleteNode, addRelationship, getOrphansFrom,
-    getOrphansTo, cleanOrphanRelationships, deleteRelationship, getRelationshipNodeFrom,
-    getRelationshipNodeTo, setNodeLabels, addNodeLabel, getNodeLabels, deleteNodeLabel, nodeFilter,
-    relationshipFilter, union, difference, intersection, getNodes, getRelationships,
-    setProperties, setProperty, deleteProperties, deleteProperty
+    -- * General objects
+    Graph, LabelSet, empty,
+    -- * Handling nodes in the graph object
+    addNode, hasNode, deleteNode, getNodes,
+    -- * Handling properties in the graph object
+    getRelationships, hasRelationship, addRelationship, deleteRelationship, getRelationshipNodeFrom,
+    getRelationshipNodeTo,
+    -- ** Handling orphaned relationships #orphan#
+    getOrphansFrom, getOrphansTo, cleanOrphanRelationships,
+    -- * Handling properties
+    setProperties, setProperty, deleteProperties, deleteProperty,
+    -- * Handling labels
+    setNodeLabels, addNodeLabel, getNodeLabels, deleteNodeLabel,
+    -- * Graph filtering functions
+    nodeFilter, relationshipFilter,
+    -- * Graph operations
+    union, difference, intersection
     )where
 
 import Data.Maybe (fromMaybe)
@@ -112,7 +131,7 @@ addRelationship r g = g {rels = M.insert (getRelPath r) r (rels g)}
 getRelationships :: Graph -> [Relationship]
 getRelationships g = M.elems $ rels g
 
- -- | Get relationships missing their "from" node
+-- | Get relationships missing their "from" node
 getOrphansFrom :: Graph -> [Relationship]
 getOrphansFrom g = M.elems $ M.filter noNode (rels g)
     where noNode r = not $ getNodePath (relFrom r) `M.member` nodes g
