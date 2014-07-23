@@ -3,6 +3,6 @@ haskell-neo4j-rest-client
 
 Haskell neo4j REST client
 
-Library still in its early stages.
+For more documentation: http://hackage.haskell.org/package/haskell-neo4j-client
 
-For usage examples look at the integration tests in the file tests/IntegrationTests.hs
+For more usage examples look at the integration tests in the file tests/IntegrationTests.hs
