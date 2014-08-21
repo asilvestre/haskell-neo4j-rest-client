@@ -85,12 +85,14 @@ httpCreate500Explained conn path body = do
 --   With 404 or 400 will return a left with the explanation
 httpCreate4XXExplained :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString -> ResourceT IO (Either T.Text a)
 httpCreate4XXExplained conn path body = do
-            res <- httpReq conn HT.methodPost path body (\s -> s `elem` [HT.status201, HT.status404, HT.status400])
+            res <- httpReq conn HT.methodPost path body (\s -> s `elem` validcodes ++ errcodes)
             let status = HC.responseStatus res
-            return $ if status == HT.status201 then parseBody res else Left $ extractException res
+            return $ if status `elem`  validcodes then parseBody res else Left $ extractException res
     where parseBody resp = case J.eitherDecode $ HC.responseBody resp of
                             Right entity -> Right entity
                             Left e -> throw $ Neo4jParseException ("Error parsing created entity: " ++ e)
+          validcodes = [HT.status200, HT.status201]
+          errcodes = [HT.status404, HT.status400]
 
 -- | Launch a POST request that doesn't expect response body, this will raise an exception if 204 is not received
 httpCreate_ :: Connection -> S.ByteString -> L.ByteString -> ResourceT IO ()

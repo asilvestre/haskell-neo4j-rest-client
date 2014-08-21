@@ -19,8 +19,9 @@ import Test.Framework.Providers.HUnit (testCase)
 import Test.HUnit.Base hiding (Test, Node)
 
 import Database.Neo4j
-import qualified Database.Neo4j.Graph as G
 import qualified Database.Neo4j.Batch as B
+import qualified Database.Neo4j.Cypher as C
+import qualified Database.Neo4j.Graph as G
 
 (<>) :: Monoid a => a -> a -> a
 (<>) = mappend
@@ -1175,3 +1176,22 @@ case_batchAllNodesWithLabelAndProperty = withConnection host port $ do
         return ()
     where lbl1 = "lbl1"
           lbl2 = "lbl2"
+
+-- | Test cypher
+case_cypherBasic :: Assertion
+case_cypherBasic = withConnection host port $ do
+        -- create initial data
+        gp <- B.runBatch $ do
+            n1 <- B.createNode $ M.fromList ["name" |: ("I" :: T.Text)]
+            n2 <- B.createNode $ M.fromList ["name" |: ("you" :: T.Text)]
+            B.createRelationship "know" M.empty n1 n2
+        -- actual test
+        let expResponse = C.Response ["TYPE(r)"] [["know"]]
+        res <- C.cypher query params
+        neo4jEqual (Right expResponse) res
+        -- cleanup
+        _ <- B.runBatch $ mapM_ B.deleteRelationship (G.getRelationships gp)
+        _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
+        return ()
+    where query = "MATCH (x {name: {startName}})-[r]-(friend) WHERE friend.name = {name} RETURN TYPE(r)"
+          params = M.fromList [("startName", C.newparam ("I" :: T.Text)), ("name", C.newparam ("you" :: T.Text))]
