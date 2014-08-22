@@ -4,7 +4,7 @@ module Database.Neo4j.Cypher (
     -- * Types
     Response(..), ParamValue(..), Params, newparam,
     -- * Sending queries
-    cypher 
+    cypher, fromResult, fromSuccess, isSuccess
     ) where
 
 import Data.Aeson ((.=), (.:))
@@ -50,3 +50,19 @@ type Params = M.HashMap T.Text ParamValue
 cypher :: T.Text -> Params -> Neo4j (Either T.Text Response)
 cypher cmd params = Neo4j $ \conn -> httpCreate4XXExplained conn cypherAPI body
     where body = J.encode $ J.object ["query" .= cmd, "params" .= J.toJSON params]
+
+-- | Get the result of the response or a default value
+fromResult :: Response -> Either T.Text Response -> Response
+fromResult def (Left _) = def
+fromResult _ (Right resp) = resp
+
+-- | Get the result of the response or a default value
+fromSuccess :: Either T.Text Response -> Response
+fromSuccess (Left _) = error "Cypher.fromSuccess but is Error"
+fromSuccess (Right resp) = resp
+
+-- | True if the operation succeeded
+isSuccess :: Either T.Text Response -> Bool
+isSuccess (Left _) = False
+isSuccess (Right _) = True
+

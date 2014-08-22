@@ -21,6 +21,8 @@ module Database.Neo4j.Graph (
     setProperties, setProperty, deleteProperties, deleteProperty,
     -- * Handling labels
     setNodeLabels, addNodeLabel, getNodeLabels, deleteNodeLabel,
+    -- * Handling Cypher results
+    addCypher,
     -- * Graph filtering functions
     nodeFilter, relationshipFilter,
     -- * Graph operations
@@ -29,11 +31,15 @@ module Database.Neo4j.Graph (
 
 import Data.Maybe (fromMaybe)
 
+import Control.Applicative ((<$>), (<*>))
+import qualified Data.Aeson as J
 import qualified Data.HashMap.Lazy as M
 import qualified Data.HashSet as HS
+import qualified Data.List as L
 import qualified Data.Text as T
 
 import Database.Neo4j.Types
+import qualified Database.Neo4j.Cypher as C
 
 type NodeIndex = M.HashMap NodePath Node
 type RelIndex = M.HashMap RelPath Relationship
@@ -213,3 +219,16 @@ intersection :: Graph -> Graph -> Graph
 intersection ga gb = relationshipFilter relFilterFunc (nodeFilter nodeFilterFunc ga)
     where relFilterFunc r = hasRelationship r gb
           nodeFilterFunc n = hasNode n gb
+
+-- | Feed a cypher result into a graph (looks for nodes and relationships and inserts them)
+addCypher :: C.Response -> Graph -> Graph
+addCypher (C.Response _ vals) ginit = foldl tryAdd ginit (concat vals)
+    where tryAdd :: Graph -> J.Value -> Graph
+          -- Try first to parse it as a relationship and then as a node, otherwise leave the graph as it is
+          tryAdd g v = fromMaybe g $ L.find parseSuccess (map ($ v) [relParser g, nodeParser g]) >>= fromResult
+          relParser g v = flip addRelationship g <$> J.fromJSON v
+          nodeParser g v = flip addNode g <$> J.fromJSON v
+          parseSuccess (J.Success _) = True
+          parseSuccess (J.Error _) = False
+          fromResult (J.Error _) = Nothing
+          fromResult (J.Success g) = Just g

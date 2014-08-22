@@ -7,11 +7,13 @@ import Data.Monoid (Monoid, mappend)
 import Data.Int (Int64)
 import Data.Maybe (fromJust)
 
+import qualified Data.Aeson as J
 import qualified Data.ByteString as S
 import qualified Data.HashMap.Lazy as M
 import qualified Data.HashSet as HS
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Data.Vector as V
 
 import Control.Exception (handle)
 import Test.Framework.TH (defaultMainGenerator)
@@ -1177,7 +1179,7 @@ case_batchAllNodesWithLabelAndProperty = withConnection host port $ do
     where lbl1 = "lbl1"
           lbl2 = "lbl2"
 
--- | Test cypher
+-- | Test cypher basic test
 case_cypherBasic :: Assertion
 case_cypherBasic = withConnection host port $ do
         -- create initial data
@@ -1186,12 +1188,164 @@ case_cypherBasic = withConnection host port $ do
             n2 <- B.createNode $ M.fromList ["name" |: ("you" :: T.Text)]
             B.createRelationship "know" M.empty n1 n2
         -- actual test
-        let expResponse = C.Response ["TYPE(r)"] [["know"]]
         res <- C.cypher query params
-        neo4jEqual (Right expResponse) res
+        neo4jBool $ C.isSuccess res
+        neo4jEqual ["TYPE(r)"] (C.cols $ C.fromSuccess res)
+        neo4jBool $ ["know"] `elem` (C.vals $ C.fromSuccess res)
         -- cleanup
         _ <- B.runBatch $ mapM_ B.deleteRelationship (G.getRelationships gp)
         _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
         return ()
     where query = "MATCH (x {name: {startName}})-[r]-(friend) WHERE friend.name = {name} RETURN TYPE(r)"
           params = M.fromList [("startName", C.newparam ("I" :: T.Text)), ("name", C.newparam ("you" :: T.Text))]
+
+
+-- | Test cypher create a node
+case_cypherCreateNode :: Assertion
+case_cypherCreateNode = withConnection host port $ do
+        res <- C.cypher query params
+        neo4jBool $ C.isSuccess res
+        let gp = G.addCypher (C.fromSuccess res) G.empty
+        let props = M.fromList ["name" |: ("Andres" :: T.Text)]
+        neo4jEqual 1 (length $ G.getNodes gp)
+        neo4jBool $ props `elem` map getNodeProperties (G.getNodes gp)
+        -- cleanup
+        _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
+        return ()
+    where query = "CREATE (n:Person { name : {name} }) RETURN n"
+          params = M.fromList [("name", C.newparam ("Andres" :: T.Text))]
+
+-- | Test cypher create a node with multiple properties
+case_cypherCreateNodeMultipleProperties :: Assertion
+case_cypherCreateNodeMultipleProperties = withConnection host port $ do
+        res <- C.cypher query params
+        neo4jBool $ C.isSuccess res
+        let gp = G.addCypher (C.fromSuccess res) G.empty
+        neo4jEqual 1 (length $ G.getNodes gp)
+        neo4jBool $ props `elem` map getNodeProperties (G.getNodes gp)
+        -- cleanup
+        _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
+        return ()
+    where query = "CREATE (n:Person { props }) RETURN n"
+          props = M.fromList ["name" |: ("Michael" :: T.Text), "position" |: ("Developer" :: T.Text),
+                              "awesome" |: True, "children" |: (3 :: Int64)]
+          params = M.fromList [("props", C.ParamProperties props)]
+
+-- | Test cypher create multiple nodes
+case_cypherCreateMultipleNodes :: Assertion
+case_cypherCreateMultipleNodes = withConnection host port $ do
+        res <- C.cypher query params
+        neo4jBool $ C.isSuccess res
+        let gp = G.addCypher (C.fromSuccess res) G.empty
+        neo4jEqual 2 (length $ G.getNodes gp)
+        neo4jBool $ propsA `elem` map getNodeProperties (G.getNodes gp)
+        neo4jBool $ propsB `elem` map getNodeProperties (G.getNodes gp)
+        -- cleanup
+        _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
+        return ()
+    where query = "CREATE (n:Person { props }) RETURN n"
+          propsA = M.fromList ["name" |: ("Andres" :: T.Text), "position" |: ("Developer" :: T.Text)]
+          propsB = M.fromList ["name" |: ("Michael" :: T.Text), "position" |: ("Developer" :: T.Text)]
+          params = M.fromList [("props", C.ParamPropertiesArray [propsA, propsB])]
+
+-- | Test cypher set all properties on a node
+case_cypherSetAllNodeProperties :: Assertion
+case_cypherSetAllNodeProperties = withConnection host port $ do
+        res <- C.cypher query params
+        neo4jBool $ C.isSuccess res
+        let gp = G.addCypher (C.fromSuccess res) G.empty
+        neo4jEqual 1 (length $ G.getNodes gp)
+        neo4jBool $ props `elem` map getNodeProperties (G.getNodes gp)
+        -- cleanup
+        _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
+        return ()
+    where query = "CREATE (n:Person { name: 'this property is to be deleted' } ) SET n = { props } RETURN n"
+          props = M.fromList ["name" |: ("Michael" :: T.Text), "position" |: ("Developer" :: T.Text),
+                              "awesome" |: True, "children" |: (3 :: Int64)]
+          params = M.fromList [("props", C.ParamProperties props)]
+
+-- | Test cypher basic query
+case_cypherBasicQuery :: Assertion
+case_cypherBasicQuery = withConnection host port $ do
+        -- create initial data
+        gp <- B.runBatch $ do
+            n1 <- B.createNode $ M.fromList ["name" |: ("I" :: T.Text)]
+            n2 <- B.createNode $ M.fromList ["name" |: ("you" :: T.Text)]
+            n3 <- B.createNode $ M.fromList ["name" |: ("him" :: T.Text), "age" |: (25 :: Int64)]
+            _ <- B.createRelationship "know" M.empty n1 n2
+            B.createRelationship "know" M.empty n1 n3
+        -- actual test
+        res <- C.cypher query params
+        neo4jBool $ C.isSuccess res
+        neo4jEqual ["type(r)", "n.name", "n.age"] (C.cols $ C.fromSuccess res)
+        neo4jBool $ ["know", "him", J.Number 25] `elem` (C.vals $ C.fromSuccess res)
+        neo4jBool $ ["know", "you", J.Null] `elem` (C.vals $ C.fromSuccess res)
+        -- cleanup
+        _ <- B.runBatch $ mapM_ B.deleteRelationship (G.getRelationships gp)
+        _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
+        return ()
+    where query = "MATCH (x {name: 'I'})-[r]->(n) RETURN type(r), n.name, n.age"
+          params = M.empty
+
+-- | Test cypher basic query get relationships
+case_cypherBasicQueryGetRels :: Assertion
+case_cypherBasicQueryGetRels = withConnection host port $ do
+        -- create initial data
+        gp <- B.runBatch $ do
+            n1 <- B.createNode $ M.fromList ["name" |: ("I" :: T.Text)]
+            n2 <- B.createNode $ M.fromList ["name" |: ("you" :: T.Text)]
+            n3 <- B.createNode $ M.fromList ["name" |: ("him" :: T.Text), "age" |: (25 :: Int64)]
+            _ <- B.createRelationship "know" M.empty n1 n2
+            B.createRelationship "know" M.empty n1 n3
+        -- actual test
+        res <- C.cypher query params
+        neo4jBool $ C.isSuccess res
+        let gres = G.addCypher (C.fromSuccess res) G.empty
+        neo4jBool $ (length $ G.getRelationships gres) >= 2
+        neo4jBool $ all (\r -> getRelType r == "know") (G.getRelationships gres)
+        neo4jEqual ["r"] (C.cols $ C.fromSuccess res)
+        -- cleanup
+        _ <- B.runBatch $ mapM_ B.deleteRelationship (G.getRelationships gp)
+        _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
+        return ()
+    where query = "MATCH (x {name: 'I'})-[r]->(n) RETURN r"
+          params = M.empty
+
+-- | Test cypher nested results
+case_cypherNestedResults :: Assertion
+case_cypherNestedResults = withConnection host port $ do
+        -- create initial data
+        gp <- B.runBatch $ do
+            n1 <- B.createNode $ M.fromList ["name" |: ("I" :: T.Text)]
+            n2 <- B.createNode $ M.fromList ["name" |: ("you" :: T.Text)]
+            B.createRelationship "know" M.empty n1 n2
+        -- actual test
+        res <- C.cypher query params
+        neo4jBool $ C.isSuccess res
+        neo4jEqual ["collect(n.name)"] (C.cols $ C.fromSuccess res)
+        let v = case (head $ head $ C.vals $ C.fromSuccess res) of
+                 J.Array vec -> vec
+                 _ -> V.empty
+        neo4jBool $ "you" `V.elem` v
+        neo4jBool $ "I" `V.elem` v
+        -- cleanup
+        _ <- B.runBatch $ mapM_ B.deleteRelationship (G.getRelationships gp)
+        _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
+        return ()
+    where query = "MATCH (n) WHERE n.name in ['I', 'you'] RETURN collect(n.name)"
+          params = M.empty
+
+-- | Test cypher errors
+case_cypherError :: Assertion
+case_cypherError = withConnection host port $ do
+        -- create initial data
+        gp <- B.runBatch $ do
+            B.createNode $ M.fromList ["age" |: (26 :: Int64)]
+        -- actual test
+        res <- C.cypher query params
+        neo4jEqual (Left "BadInputException") res
+        -- cleanup
+        _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
+        return ()
+    where query = "MATCH (x) WHERE has(x.age) RETURN x.age / 0"
+          params = M.empty
