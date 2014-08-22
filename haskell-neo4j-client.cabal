@@ -1,11 +1,11 @@
 name:                haskell-neo4j-client
-version:             0.1.0.0
+version:             0.1.5.0
 synopsis:            A Haskell neo4j client
 description:         
     Library to interact with Neo4j databases. For now, its API covers basic operations for nodes, relationships, labels
     and indexes and provides calls to use these in batch mode.
     .
-    Cypher is not yet supported, but it hopefully will be very soon.
+    Basic support for Cypher implemented
     .
     All code has been tested with Neo4j version 2.0.3
 homepage:            https://github.com/asilvestre/haskell-neo4j-rest-client
@@ -47,7 +47,7 @@ Test-Suite test-haskell-neo4j-rest-client
                      mtl ==2.2.*
 library
   hs-source-dirs:      src
-  exposed-modules:     Database.Neo4j, Database.Neo4j.Graph, Database.Neo4j.Batch
+  exposed-modules:     Database.Neo4j, Database.Neo4j.Graph, Database.Neo4j.Batch, Database.Neo4j.Cypher
   other-modules:       Database.Neo4j.Types, Database.Neo4j.Http, Database.Neo4j.Node, Database.Neo4j.Relationship,
                        Database.Neo4j.Property, Database.Neo4j.Label, Database.Neo4j.Index, Database.Neo4j.Batch.Node,
                        Database.Neo4j.Batch.Relationship, Database.Neo4j.Batch.Property, Database.Neo4j.Types,

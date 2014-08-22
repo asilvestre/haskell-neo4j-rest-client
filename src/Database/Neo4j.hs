@@ -107,3 +107,23 @@ import Database.Neo4j.Types
 -- instance 'Neo4jNoEntityException', or more generic ones like 'Neo4jHttpException' or 'Neo4jParseException'
 -- if the server  returns something totally unexpected. (I'm sure there's still work to do here preparing the code
 -- to return more specific exceptions for known scenarios)
+-- 
+-- About Cypher support for now we allow sending queries with parameters, the result is a collection of column headers
+-- and JSON data values, the Graph object has the function addCypher that tries to find
+-- nodes and relationships in a cypher query result and insert them in a "Database.Neo4j.Graph" object
+--
+-- > import qualified Database.Neo4j.Cypher as C
+-- >
+-- > withConnection host port $ do
+-- >    ...
+-- >    -- Run a cypher query with parameters
+-- >    res <- C.cypher "CREATE (n:Person { name : {name} }) RETURN n" M.fromList [("name", C.newparam ("Pep" :: T.Text))]
+-- >
+-- >    -- Get all nodes and relationships that this query returned and insert them in a Graph object
+-- >    let graph = G.addCypher (C.fromSuccess res) G.empty
+-- >
+-- >    -- Get the column headers
+-- >    let columnHeaders = C.cols $ C.fromSuccess res
+-- >
+-- >    -- Get the rows of JSON values received
+-- >    let values = C.vals $ C.fromSuccess res
