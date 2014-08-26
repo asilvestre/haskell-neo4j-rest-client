@@ -18,6 +18,11 @@ category:            Database
 build-type:          Simple
 cabal-version:       >=1.8
 
+source-repository this
+    type: git
+    location: https://github.com/asilvestre/haskell-neo4j-rest-client.git
+    tag: master
+
 Test-Suite test-haskell-neo4j-rest-client
      Type:           exitcode-stdio-1.0
      Hs-Source-Dirs: src, tests
