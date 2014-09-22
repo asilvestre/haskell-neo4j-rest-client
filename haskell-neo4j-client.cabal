@@ -27,7 +27,7 @@ Test-Suite test-haskell-neo4j-rest-client
      Type:           exitcode-stdio-1.0
      Hs-Source-Dirs: src, tests
      Main-is:        IntegrationTests.hs
-     Build-Depends:  base >=4.6,
+     Build-Depends:  base >=4.6 && <4.8,
                      bytestring ==0.10.*,
                      test-framework ==0.8.*,
                      test-framework-quickcheck2 ==0.3.*,
