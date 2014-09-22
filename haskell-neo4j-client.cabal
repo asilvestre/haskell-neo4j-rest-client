@@ -1,5 +1,5 @@
 name:                haskell-neo4j-client
-version:             0.2.0.0
+version:             0.2.0.1
 synopsis:            A Haskell neo4j client
 description:         
     Library to interact with Neo4j databases. For now, its API covers basic operations for nodes, relationships, labels
