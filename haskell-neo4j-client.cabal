@@ -58,7 +58,7 @@ library
                        Database.Neo4j.Property, Database.Neo4j.Label, Database.Neo4j.Index, Database.Neo4j.Batch.Node,
                        Database.Neo4j.Batch.Relationship, Database.Neo4j.Batch.Property, Database.Neo4j.Types,
                        Database.Neo4j.Batch.Label, Database.Neo4j.Batch.Types
-  build-depends:       base >=4.6,
+  build-depends:       base >=4.6 && <4.8,
                        containers ==0.5.*,
                        text ==1.1.*,
                        http-conduit ==2.1.*,
