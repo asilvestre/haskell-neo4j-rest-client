@@ -18,7 +18,7 @@ module Database.Neo4j (
     -- * Connection handling objects
     Connection, Hostname, Port, newConnection, withConnection,
     -- * Main monadic type to handle sequences of commands to Neo4j
-    Neo4j,
+    Neo4j(..),
     -- * Constructing and managing node/relationship properties
     Val(..), PropertyValue(..), newval, (|:), Properties, emptyProperties, getProperties, getProperty, setProperties,
         setProperty, deleteProperties, deleteProperty, 
