@@ -6,7 +6,7 @@ module Database.Neo4j.Batch (
     -- $use    
 
     -- * General
-    Batch, runBatch, BatchFuture(..),
+    Batch, runBatch, BatchFuture(..), NodeBatchIdentifier, RelBatchIdentifier,
     -- * Nodes
     createNode, getNode, deleteNode,
     -- * Relationships
