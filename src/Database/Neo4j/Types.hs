@@ -9,6 +9,7 @@ import Data.Hashable (Hashable)
 import Data.Int (Int64)
 import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid, mappend)
+import Data.String (fromString)
 import Data.Typeable (Typeable)
 import Control.Exception.Base (Exception)
 import Control.Applicative ((<$>), (<*>))
@@ -154,6 +155,9 @@ instance Entity Node where
 nodeAPI :: S.ByteString
 nodeAPI = "/db/data/node"
 
+nodeAPITxt :: T.Text
+nodeAPITxt = "/db/data/node"
+
 newtype NodePath = NodePath {runNodePath :: T.Text} deriving (Show, Eq, Generic)
 instance Hashable NodePath
 
@@ -165,6 +169,9 @@ instance NodeIdentifier Node where
 
 instance NodeIdentifier S.ByteString where
     getNodePath t = NodePath $ TE.decodeUtf8 $ nodeAPI <> "/" <> t
+
+instance NodeIdentifier Integer where
+    getNodePath n = NodePath $ nodeAPITxt <> "/" <> (fromString . show) n
 
 instance NodeIdentifier NodePath where
     getNodePath = id
@@ -232,6 +239,9 @@ instance Entity EntityObj where
 relationshipAPI :: S.ByteString
 relationshipAPI = "/db/data/relationship"
 
+relationshipAPITxt :: T.Text
+relationshipAPITxt = "/db/data/relationship"
+
 newtype RelPath = RelPath {runRelPath :: T.Text} deriving (Show, Eq, Generic)
 instance Hashable RelPath
 
@@ -249,6 +259,9 @@ instance RelIdentifier S.ByteString where
 
 instance RelIdentifier RelUrl where
     getRelPath = RelPath . urlPath . runRelUrl
+
+instance RelIdentifier Integer where
+    getRelPath n = RelPath $ relationshipAPITxt <> "/" <> (fromString . show) n
 
 runRelIdentifier :: RelIdentifier a => a -> S.ByteString
 runRelIdentifier = TE.encodeUtf8 . runRelPath . getRelPath
