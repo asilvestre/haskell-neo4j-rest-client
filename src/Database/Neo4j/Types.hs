@@ -15,7 +15,6 @@ import Control.Exception.Base (Exception)
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (mzero)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.Resource (ResourceT)
 import GHC.Generics (Generic)
 
 import Data.Aeson ((.:))
@@ -109,7 +108,7 @@ emptyProperties = M.empty
 
 -- | Tries to get the path from a URL, we try our best otherwise return the url as is
 urlPath :: T.Text -> T.Text
-urlPath url = fromMaybe url $ T.stripPrefix "http://" url >>= return . T.dropWhile (/='/')
+urlPath url = fromMaybe url $ T.dropWhile (/='/') <$> T.stripPrefix "http://" url
 
 -- | Path without the /db/data part, useful for batch paths and such
 urlMinPath :: T.Text -> T.Text
@@ -321,7 +320,7 @@ type Hostname = S.ByteString
 type Port = Int
 
 -- | Neo4j monadic type to be able to sequence neo4j commands in a connection
-newtype Neo4j a = Neo4j { runNeo4j :: Connection -> ResourceT IO a }
+newtype Neo4j a = Neo4j { runNeo4j :: Connection -> IO a }
 
 instance Monad Neo4j where
     return x = Neo4j (const (return x))
