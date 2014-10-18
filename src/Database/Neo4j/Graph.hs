@@ -11,10 +11,10 @@ module Database.Neo4j.Graph (
     -- * General objects
     Graph, LabelSet, empty,
     -- * Handling nodes in the graph object
-    addNode, hasNode, deleteNode, getNodes,
+    addNode, hasNode, deleteNode, getNodes, getNode, getNodeFrom, getNodeTo,
     -- * Handling properties in the graph object
     getRelationships, hasRelationship, addRelationship, deleteRelationship, getRelationshipNodeFrom,
-    getRelationshipNodeTo,
+    getRelationshipNodeTo, getRelationship,
     -- ** Handling orphaned relationships #orphan#
     getOrphansFrom, getOrphansTo, cleanOrphanRelationships,
     -- * Handling properties
@@ -31,7 +31,8 @@ module Database.Neo4j.Graph (
 
 import Data.Maybe (fromMaybe)
 
-import Control.Applicative ((<$>), (<*>))
+import Control.Applicative ((<$>))
+import Control.Monad (join)
 import qualified Data.Aeson as J
 import qualified Data.HashMap.Lazy as M
 import qualified Data.HashSet as HS
@@ -47,13 +48,17 @@ type NodeSet = HS.HashSet NodePath
 type LabelNodeIndex = M.HashMap Label NodeSet
 type LabelSet = HS.HashSet Label
 type NodeLabelIndex = M.HashMap NodePath LabelSet
+type RelSet = HS.HashSet RelPath
+type NodeRelIndex = M.HashMap NodePath RelSet
 
 data Graph = Graph {nodes :: NodeIndex, labels :: LabelNodeIndex, rels :: RelIndex,
-                        nodeLabels :: NodeLabelIndex} deriving (Eq, Show)
+                    nodeLabels :: NodeLabelIndex, nodeFromRels :: NodeRelIndex, nodeToRels :: NodeRelIndex
+                    } deriving (Eq, Show)
 
 -- | Create an empty graph
 empty :: Graph
-empty = Graph {nodes = M.empty, labels = M.empty, rels = M.empty, nodeLabels = M.empty}
+empty = Graph {nodes = M.empty, labels = M.empty, rels = M.empty, nodeLabels = M.empty, nodeFromRels = M.empty,
+               nodeToRels = M.empty}
 
 -- | Add a node to the graph
 addNode :: Node -> Graph -> Graph
@@ -61,11 +66,11 @@ addNode n g = g {nodes = M.insert (getNodePath n) n (nodes g)}
 
 -- | Set the properties of a node or relationship in the graph, if not present it won't do anything
 setProperties :: EntityIdentifier a => a -> Properties -> Graph -> Graph
-setProperties ei props g = fromMaybe g $ entity >>= return . newEntity >>= return . addEntity
+setProperties ei props g = fromMaybe g $ (addEntity . newEntity) <$> entity
     where path = getEntityPath ei
           entity = case path of 
-                    (EntityNodePath p) -> M.lookup p (nodes g) >>= return . entityObj
-                    (EntityRelPath p) -> M.lookup p (rels g) >>= return . entityObj
+                    (EntityNodePath p) -> entityObj <$> M.lookup p (nodes g)
+                    (EntityRelPath p) -> entityObj <$> M.lookup p (rels g)
           newEntity e = setEntityProperties e props
           addEntity e = case e of
                             (EntityNode n) -> g{nodes = M.insert (getNodePath n) n (nodes g)}
@@ -73,11 +78,11 @@ setProperties ei props g = fromMaybe g $ entity >>= return . newEntity >>= retur
 
 -- | Set a property of a node or relationship in the graph, if not present it won't do anything
 setProperty :: EntityIdentifier a => a -> T.Text -> PropertyValue -> Graph -> Graph
-setProperty ei name value g = fromMaybe g $ entity >>= return . newEntity >>= return . addEntity
+setProperty ei name value g = fromMaybe g $ (addEntity . newEntity) <$> entity
     where path = getEntityPath ei
           entity = case path of 
-                    (EntityNodePath p) -> M.lookup p (nodes g) >>= return . entityObj
-                    (EntityRelPath p) -> M.lookup p (rels g) >>= return . entityObj
+                    (EntityNodePath p) -> entityObj <$> M.lookup p (nodes g)
+                    (EntityRelPath p) -> entityObj <$> M.lookup p (rels g)
           newEntity e = setEntityProperties e $ M.insert name value (getEntityProperties e)
           addEntity e = case e of
                             (EntityNode n) -> g{nodes = M.insert (getNodePath n) n (nodes g)}
@@ -85,11 +90,11 @@ setProperty ei name value g = fromMaybe g $ entity >>= return . newEntity >>= re
 
 -- | Delete all the properties of a node or relationship, if the entity is not present it won't do anything
 deleteProperties :: EntityIdentifier a => a -> Graph -> Graph
-deleteProperties ei g = fromMaybe g $ entity >>= return . newEntity >>= return . addEntity
+deleteProperties ei g = fromMaybe g $ (addEntity . newEntity) <$> entity
     where path = getEntityPath ei
           entity = case path of 
-                    (EntityNodePath p) -> M.lookup p (nodes g) >>= return . entityObj
-                    (EntityRelPath p) -> M.lookup p (rels g) >>= return . entityObj
+                    (EntityNodePath p) -> entityObj <$> M.lookup p (nodes g)
+                    (EntityRelPath p) -> entityObj <$> M.lookup p (rels g)
           newEntity e = setEntityProperties e emptyProperties
           addEntity e = case e of
                             (EntityNode n) -> g{nodes = M.insert (getNodePath n) n (nodes g)}
@@ -97,11 +102,11 @@ deleteProperties ei g = fromMaybe g $ entity >>= return . newEntity >>= return .
 
 -- | Delete a property of a node or relationship, if the entity is not present it won't do anything
 deleteProperty :: EntityIdentifier a => a -> T.Text -> Graph -> Graph
-deleteProperty ei key g = fromMaybe g $ entity >>= return . newEntity >>= return . addEntity
+deleteProperty ei key g = fromMaybe g $ (addEntity . newEntity) <$> entity
     where path = getEntityPath ei
           entity = case path of 
-                    (EntityNodePath p) -> M.lookup p (nodes g) >>= return . entityObj
-                    (EntityRelPath p) -> M.lookup p (rels g) >>= return . entityObj
+                    (EntityNodePath p) -> entityObj <$> M.lookup p (nodes g)
+                    (EntityRelPath p) -> entityObj <$> M.lookup p (rels g)
           newEntity e = setEntityProperties e $ M.delete key (getEntityProperties e)
           addEntity e = case e of
                             (EntityNode n) -> g{nodes = M.insert (getNodePath n) n (nodes g)}
@@ -111,11 +116,27 @@ deleteProperty ei key g = fromMaybe g $ entity >>= return . newEntity >>= return
 hasNode :: NodeIdentifier a => a -> Graph -> Bool
 hasNode n g = getNodePath n `M.member` nodes g
 
+-- | Get a node in the graph
+getNode :: NodeIdentifier a => a -> Graph -> Maybe Node
+getNode n g = getNodePath n `M.lookup` nodes g
+
+-- | Get outgoing relationships from a node
+getNodeFrom :: NodeIdentifier a => a -> Graph -> Maybe [Relationship]
+getNodeFrom n g = join $ sequence <$> filter (/=Nothing) <$> map getRel <$> fromrels
+    where getRel = flip getRelationship g
+          fromrels = HS.toList <$> getNodePath n `M.lookup` nodeFromRels g
+
+-- | Get incoming relationships from a node
+getNodeTo :: NodeIdentifier a => a -> Graph -> Maybe [Relationship]
+getNodeTo n g = join $ sequence <$> filter (/=Nothing) <$> map getRel <$> torels
+    where getRel = flip getRelationship g
+          torels = HS.toList <$> getNodePath n `M.lookup` nodeToRels g
+
 -- | Get a list with all the nodes in the graph
 getNodes :: Graph -> [Node]
 getNodes g = M.elems $ nodes g
 
--- | Whether a node is present in the graph
+-- | Whether a relationship is present in the graph
 hasRelationship :: RelIdentifier a => a -> Graph -> Bool 
 hasRelationship r g = getRelPath r `M.member` rels g
 
@@ -131,11 +152,20 @@ deleteNode n g = g {nodes = M.delete nodeLoc (nodes g),
 
 -- | Add a relationship to the graph
 addRelationship :: Relationship -> Graph -> Graph
-addRelationship r g = g {rels = M.insert (getRelPath r) r (rels g)}
+addRelationship r g = g {rels = M.insert (getRelPath r) r (rels g),
+                         nodeFromRels = M.insertWith HS.union (pathFrom r) (HS.singleton relpath) (nodeFromRels g),
+                         nodeToRels = M.insertWith HS.union (pathTo r) (HS.singleton relpath) (nodeToRels g)}
+    where pathFrom = getNodePath . relFrom
+          pathTo = getNodePath . relTo
+          relpath = getRelPath r
 
 -- | Get a list with all the relationships in the graph
 getRelationships :: Graph -> [Relationship]
 getRelationships g = M.elems $ rels g
+
+-- | Get a relationship in the graph
+getRelationship :: RelIdentifier a => a -> Graph -> Maybe Relationship
+getRelationship r g = getRelPath r `M.lookup` rels g
 
 -- | Get relationships missing their "from" node
 getOrphansFrom :: Graph -> [Relationship]
@@ -153,7 +183,16 @@ cleanOrphanRelationships g = foldl (flip deleteRelationship) g (getOrphansFrom g
 
 -- | Delete a relationship from the graph
 deleteRelationship :: RelIdentifier a => a -> Graph -> Graph
-deleteRelationship r g = g {rels = M.delete (getRelPath r) (rels g)}
+deleteRelationship r g = g {rels = M.delete (getRelPath r) (rels g),
+                            nodeFromRels = removeNodeRef (nodeFromRels g) pathFrom,
+                            nodeToRels = removeNodeRef (nodeToRels g) pathTo}
+    where updNodeRel = const $ HS.delete (getRelPath r)
+          rel = M.lookup (getRelPath r) (rels g)
+          pathFrom = (getNodePath . relFrom) <$> rel
+          pathTo = (getNodePath . relTo) <$> rel
+          removeNodeRef nodeRel (Just nodepath) = M.insertWith updNodeRel nodepath HS.empty nodeRel
+          removeNodeRef nodeRel Nothing = nodeRel
+
 
 -- | Get the "node from" from a relationship
 getRelationshipNodeFrom :: Relationship -> Graph -> Maybe Node
