@@ -1343,7 +1343,7 @@ case_cypherError = withConnection host port $ do
             B.createNode $ M.fromList ["age" |: (26 :: Int64)]
         -- actual test
         res <- C.cypher query params
-        neo4jEqual (Left "BadInputException") res
+        neo4jBool $ res `elem` [Left "BadInputException", Left "ArithmeticException"]
         -- cleanup
         _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
         return ()
