@@ -35,7 +35,7 @@ createRelationship t props nodefrom nodeto = Neo4j $ \conn -> do
                         Right rel -> return rel
                         Left expl -> wrapExc expl
     where reqPath = runNodeIdentifier nodefrom <> "/relationships"
-          reqBody = J.encode $ J.object ["to" .= runNodeUrl (nodeUrl nodeto), "type" .= t,
+          reqBody = J.encode $ J.object ["to" .= runNodePath (nodePath nodeto), "type" .= t,
                                          "data" .= J.toJSON props]
           wrapExc msg
             | msg == "StartNodeNotFoundException" = throw (Neo4jNoEntityException $ runNodeIdentifier nodefrom)

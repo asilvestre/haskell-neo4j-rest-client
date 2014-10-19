@@ -20,7 +20,7 @@ class RelBatchIdentifier a where
     getRelBatchId :: a -> T.Text
 
 instance RelBatchIdentifier Relationship where
-    getRelBatchId = urlMinPath . runRelUrl . relUrl
+    getRelBatchId = urlMinPath . runRelPath . relPath
 
 instance RelBatchIdentifier RelUrl where
     getRelBatchId = urlMinPath . runRelUrl
@@ -65,9 +65,9 @@ getRelationships :: NodeBatchIdentifier n => n -> Direction -> [RelationshipType
 getRelationships n dir types = nextState cmd
     where cmd = defCmd{cmdMethod = HT.methodGet, cmdPath = path, cmdBody = "", cmdParse = parser}
           path = getNodeBatchId n <> "/relationships/" <> dirStr dir <> filterStr types
-          parser jr g = foldl (\gacc r ->  G.addRelationship r gacc) g (tryParseBody jr)
+          parser jr g = foldl (flip G.addRelationship) g (tryParseBody jr)
           dirStr Outgoing = "out"
           dirStr Incoming = "in"
           dirStr Any = "all"
           filterStr [] = ""
-          filterStr f = "/" <> (T.intercalate "%26" f)
+          filterStr f = "/" <> T.intercalate "%26" f

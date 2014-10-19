@@ -59,7 +59,7 @@ extractException resp = fromMaybe "" $ do
                 resobj <- J.decode $ HC.responseBody resp
                 flip parseMaybe resobj $ \obj -> obj .: "exception"
 
--- | Launch a POST request, this will raise an exception if 201 or 204 is not received
+-- | Launch a POST request, this will raise an exception if 201 or 200 is not received
 httpCreate :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString -> IO a
 httpCreate conn path body = do
             res <- httpReq conn HT.methodPost path body (`elem` [HT.status200, HT.status201])

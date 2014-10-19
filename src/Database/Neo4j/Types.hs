@@ -125,15 +125,11 @@ class Entity a where
     setEntityProperties :: a -> Properties -> a
     entityObj :: a -> EntityObj
     
--- | Get the path for a node entity without host and port
-nodePath :: Node -> NodePath
-nodePath = NodePath . urlPath . runNodeUrl . nodeUrl
-
 newtype NodeUrl = NodeUrl {runNodeUrl :: T.Text} deriving (Show, Eq, Generic)
 instance Hashable NodeUrl
 
 -- | Representation of a Neo4j node, has a location URI and a set of properties
-data Node = Node {nodeUrl :: NodeUrl, nodeProperties :: Properties} deriving (Show, Eq)
+data Node = Node {nodePath :: NodePath, nodeProperties :: Properties} deriving (Show, Eq)
 
 -- | Get the properties of a node
 getNodeProperties :: Node -> Properties
@@ -141,7 +137,7 @@ getNodeProperties = nodeProperties
 
 -- | JSON to Node
 instance J.FromJSON Node where
-    parseJSON (J.Object v) = Node <$> (NodeUrl <$> (v .: "self")) <*> (v .: "data" >>= J.parseJSON)
+    parseJSON (J.Object v) = Node <$> (getNodePath . NodeUrl <$> (v .: "self")) <*> (v .: "data" >>= J.parseJSON)
     parseJSON _ = mzero
 
 instance Entity Node where
@@ -187,20 +183,16 @@ type RelationshipType = T.Text
 -- | Relationship direction
 data Direction = Outgoing | Incoming | Any
 
--- | Get the path for a node entity without host and port
-relPath :: Relationship -> RelPath
-relPath = RelPath . urlPath . runRelUrl . relUrl
-
 -- | Type for a relationship location
 newtype RelUrl = RelUrl {runRelUrl :: T.Text} deriving (Show, Eq, Generic)
 instance Hashable RelUrl
 
 -- | Type for a Neo4j relationship, has a location URI, a relationship type, a starting node and a destination node
-data Relationship = Relationship {relUrl :: RelUrl,
+data Relationship = Relationship {relPath :: RelPath,
                                   relType :: RelationshipType,
                                   relProperties :: Properties,
-                                  relFrom :: NodeUrl,
-                                  relTo :: NodeUrl} deriving (Show, Eq)
+                                  relFrom :: NodePath,
+                                  relTo :: NodePath} deriving (Show, Eq)
 
 -- | Get the properties of a relationship
 getRelProperties :: Relationship -> Properties
@@ -212,9 +204,9 @@ getRelType = relType
 
 -- | JSON to Relationship
 instance J.FromJSON Relationship where
-    parseJSON (J.Object v) = Relationship <$> (RelUrl <$> v .: "self") <*> v .: "type" <*>
-                                (v .: "data" >>= J.parseJSON) <*> (NodeUrl <$> v .: "start") <*>
-                                (NodeUrl <$> v .: "end")
+    parseJSON (J.Object v) = Relationship <$> (getRelPath . RelUrl <$> v .: "self") <*> v .: "type" <*>
+                                (v .: "data" >>= J.parseJSON) <*> (getNodePath . NodeUrl <$> v .: "start") <*>
+                                (getNodePath . NodeUrl <$> v .: "end")
     parseJSON _ = mzero
 
 instance Entity Relationship where

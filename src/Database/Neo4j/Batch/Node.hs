@@ -18,7 +18,7 @@ class NodeBatchIdentifier a where
     getNodeBatchId :: a -> T.Text
 
 instance NodeBatchIdentifier Node where
-    getNodeBatchId = urlMinPath . runNodeUrl . nodeUrl
+    getNodeBatchId = urlMinPath . runNodePath . nodePath
 
 instance NodeBatchIdentifier NodeUrl where
     getNodeBatchId = urlMinPath . runNodeUrl
