@@ -24,7 +24,7 @@ module Database.Neo4j.Transactional.Cypher (
     -- * Types
     Result(..), ParamValue(..), Params, newparam,
     -- * Sending queries
-    loneTransaction
+    loneTransaction, isSuccess, fromResult, fromSuccess
    -- cypher, fromResult, fromSuccess, isSuccess
     ) where
 
@@ -46,6 +46,8 @@ import qualified Data.Vector as V
 import Database.Neo4j.Types
 import Database.Neo4j.Http
 import qualified Database.Neo4j.Graph as G
+
+import Debug.Trace
 
 --type Transaction a = ExceptT String Neo4j a
 newtype Transaction = Transaction Integer deriving (Eq, Ord)
@@ -128,15 +130,17 @@ instance J.FromJSON Response where
         case errs of
             Just err -> return $ Response (Left err)
             Nothing -> Response . Right <$> (o .: "results" >>= parseResult)
-     where parseErrs (J.Array es) =  if V.null es then return Nothing else Just <$> parseErr (V.head es)
+     where parseErrs (J.Array es) =  if trace (show es) V.null es then return Nothing else Just <$> parseErr (V.head es)
            parseErrs _ = mzero
            parseErr (J.Object e) = (,) <$> e .: "code" <*> e .: "message"
            parseErr _ = mzero
-           parseResult (J.Array rs) = if V.null rs then return emptyResponse else J.parseJSON $ V.head rs
+           parseResult (J.Array rs) = if trace (show rs) V.null rs then return emptyResponse else J.parseJSON $ V.head rs
+           parseResult _ = mzero
+    parseJSON _ = mzero
 
 -- Transaction in one request
 loneTransaction :: T.Text -> Params -> Neo4j (Either TransError Result)
-loneTransaction cmd params = Neo4j $ \conn -> runResponse <$> httpCreate conn (transAPI <> "/transaction/commit") body
+loneTransaction cmd params = Neo4j $ \conn -> runResponse <$> httpCreate conn (transAPI <> "/commit") body
     where body = J.encode $ J.object ["statements" .= [
                                         J.object ["statement" .= cmd, resultSpec,
                                                   "parameters" .= J.object["props" .= J.toJSON params]]]]
@@ -152,18 +156,17 @@ loneTransaction cmd params = Neo4j $ \conn -> runResponse <$> httpCreate conn (t
 --cypher cmd params = Neo4j $ \conn -> httpCreate4XXExplained conn cypherAPI body
 --    where body = J.encode $ J.object ["query" .= cmd, "params" .= J.toJSON params]
 --
----- | Get the result of the response or a default value
---fromResult :: Response -> Either T.Text Response -> Response
---fromResult def (Left _) = def
---fromResult _ (Right resp) = resp
---
----- | Get the result of the response or a default value
---fromSuccess :: Either T.Text Response -> Response
---fromSuccess (Left _) = error "Cypher.fromSuccess but is Error"
---fromSuccess (Right resp) = resp
---
----- | True if the operation succeeded
---isSuccess :: Either T.Text Response -> Bool
---isSuccess (Left _) = False
---isSuccess (Right _) = True
---
+-- | Get the result of the response or a default value
+fromResult :: Result -> Either TransError Result -> Result
+fromResult def (Left _) = def
+fromResult _ (Right resp) = resp
+
+-- | Get the result of the response or a default value
+fromSuccess :: Either TransError Result -> Result
+fromSuccess (Left _) = error "Cypher.fromSuccess but is Error"
+fromSuccess (Right resp) = resp
+
+-- | True if the operation succeeded
+isSuccess :: Either TransError Result -> Bool
+isSuccess (Left _) = False
+isSuccess (Right _) = True
