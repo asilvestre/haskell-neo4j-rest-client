@@ -47,7 +47,6 @@ import Database.Neo4j.Types
 import Database.Neo4j.Http
 import qualified Database.Neo4j.Graph as G
 
-import Debug.Trace
 
 --type Transaction a = ExceptT String Neo4j a
 newtype Transaction = Transaction Integer deriving (Eq, Ord)
@@ -174,11 +173,11 @@ instance J.FromJSON Response where
         case errs of
             Just err -> return $ Response (Left err)
             Nothing -> Response . Right <$> (o .: "results" >>= parseResult)
-     where parseErrs (J.Array es) =  if trace (show es) V.null es then return Nothing else Just <$> parseErr (V.head es)
+     where parseErrs (J.Array es) =  if V.null es then return Nothing else Just <$> parseErr (V.head es)
            parseErrs _ = mzero
            parseErr (J.Object e) = (,) <$> e .: "code" <*> e .: "message"
            parseErr _ = mzero
-           parseResult (J.Array rs) = if trace (show rs) V.null rs then return emptyResponse else J.parseJSON $ V.head rs
+           parseResult (J.Array rs) = if V.null rs then return emptyResponse else J.parseJSON $ V.head rs
            parseResult _ = mzero
     parseJSON _ = mzero
 
