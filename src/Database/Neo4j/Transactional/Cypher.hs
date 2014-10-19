@@ -102,6 +102,7 @@ instance J.FromJSON Stats where
                                        o .: "indexes_removed" <*>
                                        o .: "constraints_added" <*>
                                        o .: "constraints_removed"
+    parseJSON _ = mzero
 
 -- | Instance for the node type in cypher responses
 instance J.FromJSON CypherNode where
