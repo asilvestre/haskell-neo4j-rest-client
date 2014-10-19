@@ -22,7 +22,7 @@
 -- >    let values = C.vals $ C.fromSuccess res
 module Database.Neo4j.Transactional.Cypher (
     -- * Types
-    Result(..), ParamValue(..), Params, newparam,
+    Result(..), Stats(..), ParamValue(..), Params, newparam, emptyStats,
     -- * Sending queries
     loneTransaction, isSuccess, fromResult, fromSuccess
    -- cypher, fromResult, fromSuccess, isSuccess
@@ -52,12 +52,31 @@ import Debug.Trace
 --type Transaction a = ExceptT String Neo4j a
 newtype Transaction = Transaction Integer deriving (Eq, Ord)
 
+-- | Holds the connection stats
+data Stats = Stats {containsUpdates :: Bool,
+                    nodesCreated :: Integer,
+                    nodesDeleted :: Integer,
+                    propsSet :: Integer,
+                    relsCreated :: Integer,
+                    relsDeleted :: Integer,
+                    lblsAdded :: Integer,
+                    lblsRemoved :: Integer,
+                    idxAdded :: Integer,
+                    idxRemoved :: Integer,
+                    constAdded :: Integer,
+                    constRemoved :: Integer} deriving (Eq, Show)
+                
+
 -- | Type for a Cypher response with tuples containing column name and their values
-data Result = Result {cols :: [T.Text], vals :: [[J.Value]], graph :: G.Graph} deriving (Show, Eq)
+data Result = Result {cols :: [T.Text], vals :: [[J.Value]], graph :: [G.Graph], stats :: Stats} deriving (Show, Eq)
+
+-- | Default stats
+emptyStats :: Stats
+emptyStats = Stats False 0 0 0 0 0 0 0 0 0 0 0
 
 -- | An empty response
 emptyResponse :: Result
-emptyResponse = Result [] [] G.empty
+emptyResponse = Result [] [] [] emptyStats
 
 newtype CypherNode = CypherNode {runCypherNode :: (Node, [Label])} deriving (Eq, Show)
 newtype CypherRel = CypherRel {runCypherRel :: Relationship} deriving (Eq, Show)
@@ -68,6 +87,21 @@ readDefault d = fromMaybe d . readMaybe
 readIntDefault :: Integer -> String -> Integer
 readIntDefault = readDefault
 
+
+-- | Instance to parse stats from a JSON
+instance J.FromJSON Stats where
+    parseJSON (J.Object o) = Stats <$> o .: "contains_updates" <*>
+                                       o .: "nodes_created" <*>
+                                       o .: "nodes_deleted" <*>
+                                       o .: "properties_set" <*>
+                                       o .: "relationships_created" <*>
+                                       o .: "relationship_deleted" <*>
+                                       o .: "labels_added" <*>
+                                       o .: "labels_removed" <*>
+                                       o .: "indexes_added" <*>
+                                       o .: "indexes_removed" <*>
+                                       o .: "constraints_added" <*>
+                                       o .: "constraints_removed"
 
 -- | Instance for the node type in cypher responses
 instance J.FromJSON CypherNode where
@@ -92,13 +126,22 @@ buildGraph ns = foldl addRel (foldl addNode G.empty ns)
     where addNode g cn = let (n, lbls) = runCypherNode cn in G.setNodeLabels n lbls (n `G.addNode` g)
           addRel g cr = let r = runCypherRel cr in r `G.addRelationship` g
               
--- | How to create a response object from a cypher JSON response
-instance J.FromJSON Result where
-    parseJSON (J.Object o) = Result <$> (o .: "columns" >>= J.parseJSON) <*> (o .: "data" >>= J.parseJSON) <*>
-        (o .: "graph" >>= parseGraph)
+newtype DataElem = DataElem {runDataElem :: ([J.Value], G.Graph)} deriving (Eq, Show)
+
+instance J.FromJSON DataElem where
+    parseJSON (J.Object o) = DataElem <$> ((,) <$> (o .: "row" >>= J.parseJSON) <*> (o .: "graph" >>= parseGraph))
         where parseGraph (J.Object g) = buildGraph <$> (g .: "nodes" >>= J.parseJSON) <*> 
                     (g .: "relationships" >>= J.parseJSON)
               parseGraph _ = mzero
+    parseJSON _ = mzero
+
+-- | How to create a response object from a cypher JSON response
+instance J.FromJSON Result where
+    parseJSON (J.Object o) = Result <$> (o .: "columns" >>= J.parseJSON) <*> (fst <$> pData) <*> (snd <$> pData)
+                                         <*> (o .: "stats" >>= J.parseJSON)
+        where parseData v = parseDataElem <$> J.parseJSON v
+              parseDataElem ds = unzip $ map runDataElem ds
+              pData = o .: "data" >>= parseData
     parseJSON _ = mzero
                         
 transAPI :: S.ByteString
@@ -142,9 +185,10 @@ instance J.FromJSON Response where
 loneTransaction :: T.Text -> Params -> Neo4j (Either TransError Result)
 loneTransaction cmd params = Neo4j $ \conn -> runResponse <$> httpCreate conn (transAPI <> "/commit") body
     where body = J.encode $ J.object ["statements" .= [
-                                        J.object ["statement" .= cmd, resultSpec,
+                                        J.object ["statement" .= cmd, resultSpec, includeStats,
                                                   "parameters" .= J.object["props" .= J.toJSON params]]]]
           resultSpec = "resultDataContents" .= ["row", "graph" :: T.Text]
+          includeStats = "includeStats" .= True
 
 -- Start a transaction with the first parameter
 --newTransaction :: T.Text -> Params -> Neo4j Acquire Transaction
