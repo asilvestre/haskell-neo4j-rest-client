@@ -46,9 +46,11 @@ Test-Suite test-haskell-neo4j-rest-client
                      vector ==0.10.*,
                      scientific ==0.3.*,
                      unordered-containers ==0.2.*,
+                     transformers-base ==0.4.*,
                      HTTP ==4000.2.*,
                      lifted-base ==0.2.*,
                      hashable ==1.2.*,
+                     monad-control ==0.3.*,
                      mtl ==2.2.*
 
 library
@@ -75,4 +77,6 @@ library
                        HTTP ==4000.2.*,
                        lifted-base ==0.2.*,
                        hashable ==1.2.*,
+                       transformers-base ==0.4.*,
+                       monad-control ==0.3.*,
                        mtl ==2.2.*

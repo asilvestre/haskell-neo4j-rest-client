@@ -1,7 +1,10 @@
-{-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE DeriveDataTypeable  #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Database.Neo4j.Types where
 
@@ -11,10 +14,14 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid, mappend)
 import Data.String (fromString)
 import Data.Typeable (Typeable)
+import Control.Exception (throw)
 import Control.Exception.Base (Exception)
-import Control.Applicative ((<$>), (<*>))
-import Control.Monad (mzero)
+import Control.Applicative
+import Control.Monad (mzero, ap, liftM)
+import Control.Monad.Base (MonadBase, liftBase)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.Trans.Control (MonadBaseControl, liftBaseWith, restoreM, StM)
+import Control.Monad.Trans.Resource (MonadThrow, throwM)
 import GHC.Generics (Generic)
 
 import Data.Aeson ((.:))
@@ -320,5 +327,30 @@ instance Monad Neo4j where
                             a <- cmd con
                             runNeo4j (f a) con
 
+instance Functor Neo4j where
+    fmap = liftM
+
+instance Applicative Neo4j where
+    pure = return
+    (<*>) = ap
+
 instance MonadIO Neo4j where
 	liftIO f = Neo4j $ const (liftIO f)
+
+instance MonadThrow Neo4j where
+    throwM e = Neo4j $ const (throw e)
+
+instance MonadBase (Neo4j) (Neo4j) where
+    liftBase = id
+
+--instance MonadTransControl Neo4j where
+--    newtype StT Neo4j a = StReader {unStReader :: a}
+--    liftWith f = ResourceT $ \r -> f $ \(ResourceT t) -> liftM StReader $ t r
+--    restoreT = ResourceT . const . liftM unStReader
+
+--instance MonadBaseControl b IO => MonadBaseControl b (Neo4j) where
+--    newtype StM Neo4j a = StNeo4j a
+--    liftBaseWith f = Neo4j $ \conn ->
+--         liftBaseWith $ \runInBase ->
+--             f $ liftM StNeo4j . runInBase . (\(Neo4j r) -> r conn)
+--    restoreM (StNeo4j x) = Neo4j $ const $ restoreM x

@@ -68,6 +68,17 @@ httpCreate conn path body = do
                         Right entity -> entity
                         Left e -> throw $ Neo4jParseException ("Error parsing created entity: " ++ e)
 
+-- | Launch a POST request and get some headers
+httpCreateWithHeaders :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString -> IO (a, HT.ResponseHeaders)
+httpCreateWithHeaders conn path body = do
+            res <- httpReq conn HT.methodPost path body (`elem` [HT.status200, HT.status201])
+            let resBody = J.eitherDecode $ HC.responseBody res
+            let result = case resBody of
+                            Right entity -> entity
+                            Left e -> throw $ Neo4jParseException ("Error parsing created entity: " ++ e)
+            let headers = HC.responseHeaders res
+            return (result, headers)
+
 -- | Launch a POST request, this will raise an exception if 201 or 204 is not received, explain 500
 httpCreate500Explained :: J.FromJSON a => Connection -> S.ByteString -> L.ByteString ->
                                              IO (Either L.ByteString a)

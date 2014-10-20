@@ -1,4 +1,7 @@
 {-# LANGUAGE OverloadedStrings  #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances  #-}
 
 -- | Module to provide Cypher support.
 --  Currently we allow sending queries with parameters, the result is a collection of column headers
@@ -24,32 +27,35 @@ module Database.Neo4j.Transactional.Cypher (
     -- * Types
     Result(..), Stats(..), ParamValue(..), Params, newparam, emptyStats,
     -- * Sending queries
-    loneTransaction, isSuccess, fromResult, fromSuccess
+    loneQuery, isSuccess, fromResult, fromSuccess, runTransaction, newTransaction, cypher, rollback--, newTransactionWithQuery
    -- cypher, fromResult, fromSuccess, isSuccess
     ) where
 
---import Control.Monad.Trans.Except
---import Data.Acquire
+import Control.Monad.Reader
+import Control.Monad.State.Strict
 
-import Data.Aeson ((.=), (.:))
-import Data.Maybe (fromMaybe)
 import Control.Applicative ((<$>), (<*>))
-import Control.Monad (mzero)
+import Data.Aeson ((.=), (.:))
+import Data.List (find)
+import Data.Maybe (fromMaybe)
+import Data.Typeable (Typeable)
 import Text.Read (readMaybe)
 
+import qualified Control.Exception as Exc
+import qualified Control.Monad.Trans.Resource as R
 import qualified Data.Aeson as J
+import qualified Data.Acquire as A
 import qualified Data.ByteString as S
+import qualified Data.ByteString.Lazy as L
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Text as T
 import qualified Data.Vector as V
+import qualified Network.HTTP.Types as HT
 
 import Database.Neo4j.Types
 import Database.Neo4j.Http
 import qualified Database.Neo4j.Graph as G
 
-
---type Transaction a = ExceptT String Neo4j a
-newtype Transaction = Transaction Integer deriving (Eq, Ord)
 
 -- | Holds the connection stats
 data Stats = Stats {containsUpdates :: Bool,
@@ -65,7 +71,6 @@ data Stats = Stats {containsUpdates :: Bool,
                     constAdded :: Integer,
                     constRemoved :: Integer} deriving (Eq, Show)
                 
-
 -- | Type for a Cypher response with tuples containing column name and their values
 data Result = Result {cols :: [T.Text], vals :: [[J.Value]], graph :: [G.Graph], stats :: Stats} deriving (Show, Eq)
 
@@ -165,6 +170,17 @@ type Params = M.HashMap T.Text ParamValue
 
 type TransError = (T.Text, T.Text)
 
+type TransactionId = S.ByteString
+
+-- | Rollback exception
+data TransactionException = TransactionEnded deriving (Show, Typeable, Eq)
+instance Exc.Exception TransactionException
+
+-- | Different transaction states
+data TransState = TransInit | TransStarted ReleaseKey TransactionId | TransDone deriving (Show, Eq)
+
+type Transaction a = ReaderT Connection (StateT TransState (R.ResourceT IO)) a
+
 newtype Response = Response {runResponse :: Either TransError Result} deriving (Show, Eq)
 
 instance J.FromJSON Response where
@@ -182,17 +198,87 @@ instance J.FromJSON Response where
     parseJSON _ = mzero
 
 -- Transaction in one request
-loneTransaction :: T.Text -> Params -> Neo4j (Either TransError Result)
-loneTransaction cmd params = Neo4j $ \conn -> runResponse <$> httpCreate conn (transAPI <> "/commit") body
-    where body = J.encode $ J.object ["statements" .= [
+loneQuery :: T.Text -> Params -> Neo4j (Either TransError Result)
+loneQuery cmd params =  transactionReq (transAPI <> "/commit") cmd params 
+
+-- Generate the body for a query
+queryBody :: T.Text -> Params -> L.ByteString
+queryBody cmd params = J.encode $ J.object ["statements" .= [
                                         J.object ["statement" .= cmd, resultSpec, includeStats,
                                                   "parameters" .= J.object["props" .= J.toJSON params]]]]
-          resultSpec = "resultDataContents" .= ["row", "graph" :: T.Text]
+    where resultSpec = "resultDataContents" .= ["row", "graph" :: T.Text]
           includeStats = "includeStats" .= True
 
--- Start a transaction with the first parameter
---newTransaction :: T.Text -> Params -> Neo4j Acquire Transaction
---newTransaction = Neo4j $ \conn -> http
+-- | General function to launch queries inside a transaction
+transactionReq :: S.ByteString -> T.Text -> Params -> Neo4j (Either TransError Result)
+transactionReq path cmd params = Neo4j $ \conn -> runResponse <$> httpCreate conn path (queryBody cmd params)
+
+-- | Run a transaction and get its final result
+runTransaction :: Transaction a -> Neo4j a
+runTransaction t = Neo4j $ \conn -> (Right <$> R.runResourceT (fst <$> runStateT (runReaderT t conn) TransInit))
+
+-- | Handle exceptions thrown inside a transaction like rollbacks
+handleTransactionExc :: forall a. IO (Either TransError a) -> IO (Either TransError a)
+handleTransactionExc = Exc.handle handler
+    where handler :: TransactionException -> IO (Either TransError a)
+          handler TransactionRollback = return $ Left ("Rollback", "")
+
+-- | Build a new transaction (This won't actually perform anything until the first query is issued)
+newTransaction :: Transaction ()
+newTransaction = return ()
+
+-- | Run a cypher query in a transaction
+cypher :: T.Text -> Params -> Transaction (Either TransError Result)
+cypher cmd params = do
+      conn <- ask
+      st <- lift $ get
+      res <- case st of
+                -- the transaction is already created
+                TransStarted _ transId -> liftIO $ reqTransCreated conn (transAPI <> "/" <> transId)
+                -- if this is the first query and the transaction hasn't been created yet, create it
+                TransInit -> do 
+                        (key, (resp, headers)) <- lift $ lift $ reqNewTrans conn
+                        lift $ put (TransStarted key $ transIdFromHeaders headers)
+                        return $ resp
+      return $ runResponse $ res
+    where reqNewTrans conn = acquireTrans conn $ httpCreateWithHeaders conn transAPI (queryBody cmd params)
+          reqTransCreated conn path = httpCreate conn path (queryBody cmd params)
+    
+-- | Rollback a transaction
+rollback :: Transaction ()
+rollback = liftIO $ Exc.throw TransactionRollback
+
+-- | Commit a transaction
+commit :: Transaction ()
+commit = do
+    conn <- ask
+    mTransId <- lift $ get
+    case mTransId of
+        Just transId -> liftIO $ httpReq conn HT.methodPost (transAPI <> "/" <> transId
+
+
+
+-- | Start a transaction with the first query to perform
+--newTransactionWithQuery :: T.Text -> Params -> Neo4j (Transaction (Either TransError Result))
+--newTransactionWithQuery cmd params = Neo4j $ \conn -> do
+--            (resp, headers) <- acquireTrans conn (httpCreateWithHeaders conn transAPI (queryBody cmd params))
+--            let result = runResponse resp
+--            let transId = transIdFromHeaders headers
+--            lift $ put (Just transId)
+--            return result
+    
+-- | Get the transaction ID from the location header
+transIdFromHeaders :: HT.ResponseHeaders -> TransactionId
+transIdFromHeaders headers = commitId $ fromMaybe (transAPI <> "-1") $ (snd <$> find ((==HT.hLocation) . fst) headers)
+   where commitId loc = snd $ S.breakSubstring transAPI loc
+
+-- | Start a transaction and register the transaction to be committed/rollbacked
+acquireTrans :: Connection -> IO (a, HT.ResponseHeaders) -> R.ResourceT IO (R.ReleaseKey (a, HT.ResponseHeaders))
+acquireTrans conn req = A.allocateAcquire (A.mkAcquireType req freeRes)
+    where freeRes (_, headers) A.ReleaseNormal = let transId = transIdFromHeaders headers in
+             void $ httpReq conn HT.methodPost (transAPI <> "/" <> transId <> "/commit") "" (const True)
+          freeRes (_, headers) _ = let transId = transIdFromHeaders headers in
+             void $ httpReq conn HT.methodPost (transAPI <> "/" <> transId <> "/rollback") "" (const True)
 
 
 -- | Run a cypher query
