@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances, TemplateHaskell #-}
 module Main where
 
+import Control.Monad (void)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Monoid (Monoid, mappend)
 import Data.Int (Int64)
@@ -1362,7 +1363,7 @@ case_loneTransactionBasicQuery = withConnection host port $ do
             _ <- B.createRelationship "know" M.empty n1 n2
             B.createRelationship "know" M.empty n1 n3
         -- actual test
-        res <- TC.loneTransaction query params
+        res <- TC.loneQuery query params
         neo4jBool $ TC.isSuccess res
         neo4jEqual ["type(r)", "n.name", "n.age"] (TC.cols $ TC.fromSuccess res)
         neo4jBool $ ["know", "him", J.Number 25] `elem` (TC.vals $ TC.fromSuccess res)
@@ -1379,13 +1380,34 @@ case_loneTransactionBasicQuery = withConnection host port $ do
 case_cypherTransactionError :: Assertion
 case_cypherTransactionError = withConnection host port $ do
         -- create initial data
-        gp <- B.runBatch $ do
-            B.createNode $ M.fromList ["age" |: (26 :: Int64)]
+        gp <- B.runBatch $ B.createNode $ M.fromList ["age" |: (26 :: Int64)]
         -- actual test
-        res <- TC.loneTransaction query params
+        res <- TC.loneQuery query params
         neo4jEqual (Left ("Neo.ClientError.Statement.ArithmeticError","/ by zero")) res
         -- cleanup
         _ <- B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
         return ()
     where query = "MATCH (x) WHERE has(x.age) RETURN x.age / 0"
           params = M.empty
+
+-- | Test a cypher transaction
+case_cypherTransaction :: Assertion
+case_cypherTransaction = withConnection host port $ do
+        -- actual test
+        res <- TC.runTransaction $ do
+            tres <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {age: {age2}}) \
+                              \CREATE p1 = (pere)-[:KNOWS]->(pau) RETURN pere, pau, p1, pere.age" $
+                                M.fromList [("age", TC.newparam (78 :: Int64)), ("age2", TC.newparam (99 :: Int64))]
+            voidIO $ assertBool "" $ TC.isSuccess tres
+            let (Right result) = tres
+            voidIO $ assertEqual "" ["pere", "pau", "p1", "pere.age"] (TC.cols result)
+            voidIO $ assertEqual "" (TC.Stats True 2 0 2 1 0 2 0 0 0 0 0) (TC.stats result)
+            let vals = TC.vals result
+            voidIO $ assertEqual "" 1 (length vals)
+            voidIO $ assertEqual "" 6 (length $ head vals)
+            voidIO $ assertEqual "" (J.Number 78.0) (head vals !! 5)
+            voidIO $ assertEqual "" 1 (length $ TC.graph result)
+            voidIO $ assertEqual "" 1 (length $ G.getRelationships (head $ TC.graph result))
+            voidIO $ assertEqual "" 2 (length $ G.getNodes (head $ TC.graph result))
+        liftIO $ print res
+    where voidIO x = void $ liftIO x

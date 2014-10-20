@@ -20,7 +20,7 @@ import Control.Applicative
 import Control.Monad (mzero, ap, liftM)
 import Control.Monad.Base (MonadBase, liftBase)
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.Trans.Control (MonadBaseControl, liftBaseWith, restoreM, StM)
+--import Control.Monad.Trans.Control (MonadBaseControl, liftBaseWith, restoreM, StM)
 import Control.Monad.Trans.Resource (MonadThrow, throwM)
 import GHC.Generics (Generic)
 
