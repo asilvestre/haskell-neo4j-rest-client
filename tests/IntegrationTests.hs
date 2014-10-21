@@ -1393,21 +1393,105 @@ case_cypherTransactionError = withConnection host port $ do
 -- | Test a cypher transaction
 case_cypherTransaction :: Assertion
 case_cypherTransaction = withConnection host port $ do
-        -- actual test
         res <- TC.runTransaction $ do
-            tres <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {age: {age2}}) \
+            result <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
                               \CREATE p1 = (pere)-[:KNOWS]->(pau) RETURN pere, pau, p1, pere.age" $
-                                M.fromList [("age", TC.newparam (78 :: Int64)), ("age2", TC.newparam (99 :: Int64))]
-            voidIO $ assertBool "" $ TC.isSuccess tres
-            let (Right result) = tres
+                                M.fromList [("age", TC.newparam (78 :: Int64)),
+                                            ("props", TC.ParamProperties $ M.fromList["age" |: (99 :: Int64)])]
             voidIO $ assertEqual "" ["pere", "pau", "p1", "pere.age"] (TC.cols result)
             voidIO $ assertEqual "" (TC.Stats True 2 0 2 1 0 2 0 0 0 0 0) (TC.stats result)
             let vals = TC.vals result
             voidIO $ assertEqual "" 1 (length vals)
-            voidIO $ assertEqual "" 6 (length $ head vals)
-            voidIO $ assertEqual "" (J.Number 78.0) (head vals !! 5)
+            voidIO $ assertEqual "" 4 (length $ head vals)
+            voidIO $ assertEqual "" (J.Number 78.0) (head vals !! 3)
             voidIO $ assertEqual "" 1 (length $ TC.graph result)
             voidIO $ assertEqual "" 1 (length $ G.getRelationships (head $ TC.graph result))
             voidIO $ assertEqual "" 2 (length $ G.getNodes (head $ TC.graph result))
-        liftIO $ print res
+            return result
+        neo4jBool $ TC.isSuccess res
+        let (Right tresult) = res
+        let gp = head $ TC.graph tresult
+        void $ B.runBatch $ mapM_ B.deleteRelationship (G.getRelationships gp)
+        void $ B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
     where voidIO x = void $ liftIO x
+
+-- | Test a cypher transaction with a explicit commit
+case_cypherTransactionExplicitCommit :: Assertion
+case_cypherTransactionExplicitCommit = withConnection host port $ do
+        res <- TC.runTransaction $ do
+            result <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
+                              \CREATE p1 = (pere)-[:KNOWS]->(pau) RETURN pere, pau, p1, pere.age" $
+                                M.fromList [("age", TC.newparam (78 :: Int64)),
+                                            ("props", TC.ParamProperties $ M.fromList["age" |: (99 :: Int64)])]
+            void $ TC.cypher "CREATE (pep: PERSON {age: 55})" M.empty
+            TC.commit
+            return result
+        neo4jBool $ TC.isSuccess res
+        let (Right result) = res
+        voidIO $ assertEqual "" ["pere", "pau", "p1", "pere.age"] (TC.cols result)
+        voidIO $ assertEqual "" (TC.Stats True 2 0 2 1 0 2 0 0 0 0 0) (TC.stats result)
+        let vals = TC.vals result
+        voidIO $ assertEqual "" 1 (length vals)
+        voidIO $ assertEqual "" 4 (length $ head vals)
+        voidIO $ assertEqual "" (J.Number 78.0) (head vals !! 3)
+        voidIO $ assertEqual "" 1 (length $ TC.graph result)
+        voidIO $ assertEqual "" 1 (length $ G.getRelationships (head $ TC.graph result))
+        voidIO $ assertEqual "" 2 (length $ G.getNodes (head $ TC.graph result))
+        let gp = head $ TC.graph result
+        void $ B.runBatch $ mapM_ B.deleteRelationship (G.getRelationships gp)
+        void $ B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
+    where voidIO x = void $ liftIO x
+
+-- | Test a cypher transaction with a keepalive
+case_cypherTransactionKeepAlive :: Assertion
+case_cypherTransactionKeepAlive = withConnection host port $ do
+        res <- TC.runTransaction $ do
+            TC.keepalive
+            void $ TC.cypher "CREATE (pep: PERSON {age: 55})" M.empty
+            TC.keepalive
+            result <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
+                              \CREATE p1 = (pere)-[:KNOWS]->(pau) RETURN pere, pau, p1, pere.age" $
+                                M.fromList [("age", TC.newparam (78 :: Int64)),
+                                            ("props", TC.ParamProperties $ M.fromList["age" |: (99 :: Int64)])]
+            return result
+        neo4jBool $ TC.isSuccess res
+        let (Right result) = res
+        voidIO $ assertEqual "" ["pere", "pau", "p1", "pere.age"] (TC.cols result)
+        voidIO $ assertEqual "" (TC.Stats True 2 0 2 1 0 2 0 0 0 0 0) (TC.stats result)
+        let vals = TC.vals result
+        voidIO $ assertEqual "" 1 (length vals)
+        voidIO $ assertEqual "" 4 (length $ head vals)
+        voidIO $ assertEqual "" (J.Number 78.0) (head vals !! 3)
+        voidIO $ assertEqual "" 1 (length $ TC.graph result)
+        voidIO $ assertEqual "" 1 (length $ G.getRelationships (head $ TC.graph result))
+        voidIO $ assertEqual "" 2 (length $ G.getNodes (head $ TC.graph result))
+        let gp = head $ TC.graph result
+        void $ B.runBatch $ mapM_ B.deleteRelationship (G.getRelationships gp)
+        void $ B.runBatch $ mapM_ B.deleteNode (G.getNodes gp)
+    where voidIO x = void $ liftIO x
+
+-- | Test a cypher transaction with an error
+case_cypherErrorInTransaction :: Assertion
+case_cypherErrorInTransaction = withConnection host port $ do
+        res <- TC.runTransaction $ do
+            -- query with wrong syntax
+            void $ TC.cypher "i" M.empty
+            TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
+                              \CREATE p1 = (pere)-[:KNOWS]->(pau) RETURN pere, pau, p1, pere.age" $
+                                M.fromList [("age", TC.newparam (78 :: Int64)),
+                                            ("props", TC.ParamProperties $ M.fromList["age" |: (99 :: Int64)])]
+        neo4jBool $ not $ TC.isSuccess res
+        neo4jEqual (Left ("Neo.ClientError.Statement.InvalidSyntax",
+                            "Invalid input 'i': expected <init> (line 1, column 1)\n\"i\"\n ^")) res
+
+-- | Test a cypher rollback transaction
+case_cypherTransactionRollback :: Assertion
+case_cypherTransactionRollback = withConnection host port $ do
+         void $ TC.runTransaction $ do
+            void $ TC.cypher "CREATE (pepe: PERSON {age: 55})" M.empty
+            result <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
+                              \CREATE p1 = (pere)-[:KNOWS]->(pau) RETURN pere, pau, p1, pere.age" $
+                                M.fromList [("age", TC.newparam (78 :: Int64)),
+                                            ("props", TC.ParamProperties $ M.fromList["age" |: (99 :: Int64)])]
+            TC.rollback
+            return result

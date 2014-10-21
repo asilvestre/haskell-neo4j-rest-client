@@ -32,6 +32,7 @@ module Database.Neo4j.Transactional.Cypher (
 
 import Control.Monad.Reader
 import Control.Monad.State.Strict
+import Control.Monad.Trans.Except
 
 import Control.Applicative ((<$>), (<*>))
 import Data.Aeson ((.=), (.:))
@@ -178,7 +179,7 @@ instance Exc.Exception TransactionException
 -- | Different transaction states
 data TransState = TransInit | TransStarted R.ReleaseKey TransactionId | TransDone
 
-type Transaction a = ReaderT Connection (StateT TransState (R.ResourceT IO)) a
+type Transaction a = ExceptT TransError (ReaderT Connection (StateT TransState (R.ResourceT IO))) a
 
 newtype Response = Response {runResponse :: Either TransError Result} deriving (Show, Eq)
 
@@ -214,29 +215,38 @@ transactionReq path cmd params = Neo4j $ \conn -> runResponse <$> httpCreate con
 
 -- | Run a transaction and get its final result, has an implicit commit request (or rollback if an exception occurred)
 -- | This implicit commit/rollback will only be executed if it hasn't before because of an explicit one
-runTransaction :: Transaction a -> Neo4j a
-runTransaction t = Neo4j $ \conn -> R.runResourceT (fst <$> runStateT (runReaderT t conn) TransInit)
+runTransaction :: Transaction a -> Neo4j (Either TransError a)
+runTransaction t = Neo4j $ \conn ->
+                     R.runResourceT (fst <$> runStateT (runReaderT (runExceptT $ catchErrors t) conn) TransInit)
 
--- | Run a cypher query in a transaction
-cypher :: T.Text -> Params -> Transaction (Either TransError Result)
+-- | If a query returns an error we have to stop processing the transaction and make sure it's rolled back
+catchErrors :: Transaction a -> Transaction a
+catchErrors t = catchE t handle
+    where handle err = do
+                        rollback
+                        ExceptT $ return (Left err)
+
+-- | Run a cypher query in a transaction, if an error occurs the transaction will stop and rollback
+cypher :: T.Text -> Params -> Transaction Result
 cypher cmd params = do
       conn <- ask
       st <- lift get
       res <- case st of
                 -- if this is the first query and the transaction hasn't been created yet, create it
                 TransInit -> do 
-                        (key, (resp, headers)) <- lift $ lift $ reqNewTrans conn
+                        (key, (resp, headers)) <- lift $ lift $ lift $ reqNewTrans conn
                         lift $ put (TransStarted key $ transIdFromHeaders headers)
                         return resp
                 -- the transaction is already created
                 TransStarted _ transId -> liftIO $ reqTransCreated conn transId
                 -- if the transaction has already ended raise an exception
                 TransDone -> liftIO $ Exc.throw TransactionEndedExc
-      return $ runResponse res
+      ExceptT $ return $ runResponse res
     where reqNewTrans conn = acquireTrans conn $ httpCreateWithHeaders conn transAPI (queryBody cmd params)
           reqTransCreated conn path = httpCreate conn path (queryBody cmd params)
 
 -- | Rollback a transaction
+-- | after this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
 rollback :: Transaction ()
 rollback = do
     conn <- ask
@@ -250,6 +260,7 @@ rollback = do
         TransDone -> liftIO $ Exc.throw TransactionEndedExc
 
 -- | Commit a transaction
+-- | after this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
 commit :: Transaction ()
 commit = do
     conn <- ask
@@ -262,8 +273,9 @@ commit = do
             lift $ put TransDone
         TransDone -> liftIO $ Exc.throw TransactionEndedExc
 
--- | Send a cypher query and commit at the same time
-commitWith :: T.Text -> Params -> Transaction (Either TransError Result)
+-- | Send a cypher query and commit at the same time, if an error occurs the transaction will be rolled back
+-- | after this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
+commitWith :: T.Text -> Params -> Transaction Result
 commitWith cmd params = do
       conn <- ask
       st <- lift get
@@ -277,7 +289,7 @@ commitWith cmd params = do
                 -- if the transaction has already ended raise an exception
                 TransDone -> liftIO $ Exc.throw TransactionEndedExc
       lift $ put TransDone
-      return $ runResponse res
+      ExceptT $ return $ runResponse res
     where req conn path = httpCreate conn path (queryBody cmd params)
 
 -- | Send a keep alive message to an open transaction
@@ -305,7 +317,7 @@ commitReq :: Connection -> TransactionId -> IO ()
 commitReq conn trId = void $ httpReq conn HT.methodPost (trId <> "/commit") "" (const True)
 
 rollbackReq :: Connection -> TransactionId -> IO ()
-rollbackReq conn trId = void $ httpReq conn HT.methodPost (trId <> "/rollback") "" (const True)
+rollbackReq conn trId = void $ httpReq conn HT.methodDelete trId "" (const True)
 
 keepaliveReq :: Connection -> TransactionId -> IO ()
 keepaliveReq conn trId = void $ httpReq conn HT.methodPost trId keepaliveBody (const True)
