@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings  #-}
 
--- | Module to provide Cypher support.
+-- | IMPORTANT! MODULE DEPRECATED, better use the code in this same library that uses the Neo4j transactional endpoint
+--   in "Database.Neo4j.Transactional.Cypher"
+--  Module to provide Cypher support.
 --  Currently we allow sending queries with parameters, the result is a collection of column headers
 --  and JSON data values, the Graph object has the function addCypher that tries to find
 --  nodes and relationships in a cypher query result and insert them in a "Database.Neo4j.Graph" object
@@ -86,3 +88,4 @@ isSuccess :: Either T.Text Response -> Bool
 isSuccess (Left _) = False
 isSuccess (Right _) = True
 
+{-# DEPRECATED cypher, fromResult, fromSuccess, isSuccess "Use Database.Neo4j.Transactional.Cypher instead" #-} 

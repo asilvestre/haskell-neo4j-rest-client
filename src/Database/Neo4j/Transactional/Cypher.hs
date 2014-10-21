@@ -3,26 +3,26 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances  #-}
 
--- | Module to provide Cypher support.
---  Currently we allow sending queries with parameters, the result is a collection of column headers
---  and JSON data values, the Graph object has the function addCypher that tries to find
---  nodes and relationships in a cypher query result and insert them in a "Database.Neo4j.Graph" object
---
--- > import qualified Database.Neo4j.Cypher as C
+-- | Module to provide Cypher support using the transactional endpoint.
+-- 
+--  Example:
+-- > import qualified Database.Neo4j.Transactional.Cypher as T
 -- >
 -- > withConnection host port $ do
 -- >    ...
--- >    -- Run a cypher query with parameters
--- >    res <- C.cypher "CREATE (n:Person { name : {name} }) RETURN n" M.fromList [("name", C.newparam ("Pep" :: T.Text))]
--- >
--- >    -- Get all nodes and relationships that this query returned and insert them in a Graph object
--- >    let graph = G.addCypher (C.fromSuccess res) G.empty
--- >
--- >    -- Get the column headers
--- >    let columnHeaders = C.cols $ C.fromSuccess res
--- >
--- >    -- Get the rows of JSON values received
--- >    let values = C.vals $ C.fromSuccess res
+-- >    res <- TC.runTransaction $ do
+-- >            -- Queries return a result with columns, rows, a list of graphs and stats with entities created and so
+-- >            result <- T.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
+-- >                              \CREATE p1 = (pere)-[:KNOWS]->(pau) RETURN pere, pau, p1, pere.age" $
+-- >                                M.fromList [("age", TC.newparam (78 :: Int64)),
+-- >                                            ("props", TC.ParamProperties $ M.fromList["age" |: (99 :: Int64)])]
+-- >            -- if any of the commands returns an error the transaction is rollbacked and leaves
+-- >            result 2 <- T.cypher "not a command" M.empty
+-- >            void $ TC.cypher "CREATE (pep: PERSON {age: 55})" M.empty
+-- >            -- Transactions are implicitly commited/rollbacked (in case of exception)
+-- >            -- but can be explicitly committed and rollbacked
+-- >            return (result, result2)
+-- >    ...
 module Database.Neo4j.Transactional.Cypher (
     -- * Types
     Result(..), Stats(..), ParamValue(..), Params, newparam, emptyStats,
@@ -47,13 +47,13 @@ import qualified Data.Aeson as J
 import qualified Data.Acquire as A
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
-import qualified Data.HashMap.Lazy as M
 import qualified Data.Text as T
 import qualified Data.Vector as V
 import qualified Network.HTTP.Types as HT
 
 import Database.Neo4j.Types
 import Database.Neo4j.Http
+import Database.Neo4j.Cypher (ParamValue(..), Params, newparam)
 import qualified Database.Neo4j.Graph as G
 
 
@@ -152,22 +152,6 @@ instance J.FromJSON Result where
 transAPI :: S.ByteString
 transAPI = "/db/data/transaction"
 
--- | Value for a cypher parmeter value, might be a literal, a property map or a list of property maps
-data ParamValue = ParamLiteral PropertyValue | ParamProperties Properties | ParamPropertiesArray [Properties]
-     deriving (Show, Eq)
-
-newparam :: PropertyValueConstructor a => a -> ParamValue
-newparam = ParamLiteral . newval
-
--- | Instance toJSON for param values so we can serialize them in queries
-instance J.ToJSON ParamValue where
-    toJSON (ParamLiteral l) = J.toJSON l
-    toJSON (ParamProperties p) = J.toJSON p
-    toJSON (ParamPropertiesArray ps) = J.toJSON ps
-
--- | We use hashmaps to represent Cypher parameters
-type Params = M.HashMap T.Text ParamValue
-
 type TransError = (T.Text, T.Text)
 
 type TransactionId = S.ByteString
@@ -246,7 +230,7 @@ cypher cmd params = do
           reqTransCreated conn path = httpCreate conn path (queryBody cmd params)
 
 -- | Rollback a transaction
--- | after this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
+--  after this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
 rollback :: Transaction ()
 rollback = do
     conn <- ask
@@ -260,7 +244,7 @@ rollback = do
         TransDone -> liftIO $ Exc.throw TransactionEndedExc
 
 -- | Commit a transaction
--- | after this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
+--  after this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
 commit :: Transaction ()
 commit = do
     conn <- ask
@@ -274,7 +258,7 @@ commit = do
         TransDone -> liftIO $ Exc.throw TransactionEndedExc
 
 -- | Send a cypher query and commit at the same time, if an error occurs the transaction will be rolled back
--- | after this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
+--  after this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
 commitWith :: T.Text -> Params -> Transaction Result
 commitWith cmd params = do
       conn <- ask

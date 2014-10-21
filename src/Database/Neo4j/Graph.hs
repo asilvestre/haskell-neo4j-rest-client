@@ -2,8 +2,6 @@
 
 -- | Module to handle 'Graph' objects. These have information about a group of nodes, relationships,
 --  and information about labels per node and nodes per label.
---  'Graph' objects for now are returned by "Database.Neo4j.Batch" operations and in the future hopefully after
---  adding cypher support they will be part of their result
 --  Notice a graph can have relationships and at the same time not have some of the nodes of those
 --  relationships, see the section called handling orphaned relationships. This is so because commands in a batch
 --  might retrieve relationships but might not create or retrieve their respective nodes.
@@ -259,7 +257,7 @@ intersection ga gb = relationshipFilter relFilterFunc (nodeFilter nodeFilterFunc
     where relFilterFunc r = hasRelationship r gb
           nodeFilterFunc n = hasNode n gb
 
--- | Feed a cypher result into a graph (looks for nodes and relationships and inserts them)
+-- | Feed a cypher result (from the old API) into a graph (looks for nodes and relationships and inserts them)
 addCypher :: C.Response -> Graph -> Graph
 addCypher (C.Response _ vals) ginit = foldl tryAdd ginit (concat vals)
     where tryAdd :: Graph -> J.Value -> Graph
