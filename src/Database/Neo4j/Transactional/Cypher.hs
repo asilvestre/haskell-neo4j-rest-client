@@ -6,6 +6,7 @@
 -- | Module to provide Cypher support using the transactional endpoint.
 -- 
 --  Example:
+--
 -- > import qualified Database.Neo4j.Transactional.Cypher as T
 -- >
 -- > withConnection host port $ do
@@ -22,12 +23,13 @@
 -- >            -- Transactions are implicitly commited/rollbacked (in case of exception)
 -- >            -- but can be explicitly committed and rollbacked
 -- >            return (result, result2)
--- >    ...
 module Database.Neo4j.Transactional.Cypher (
     -- * Types
     Result(..), Stats(..), ParamValue(..), Params, newparam, emptyStats,
     -- * Sending queries
-    loneQuery, isSuccess, fromResult, fromSuccess, runTransaction, cypher, rollback, commit, keepalive, commitWith
+    loneQuery,  runTransaction, cypher, rollback, commit, keepalive, commitWith,
+    -- * Aux functions
+    isSuccess, fromResult, fromSuccess
     ) where
 
 import Control.Monad.Reader
