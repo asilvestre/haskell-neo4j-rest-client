@@ -309,7 +309,8 @@ data Neo4jException = Neo4jHttpException String |
                       Neo4jUnexpectedResponseException HT.Status |
                       Neo4jNoSuchProperty T.Text |
                       Neo4jBatchException L.ByteString |
-                      Neo4jParseException String deriving (Show, Typeable, Eq)
+                      Neo4jParseException String |
+                      TransactionEndedExc deriving (Show, Typeable, Eq)
 instance Exception Neo4jException
 
 -- | Type for a connection

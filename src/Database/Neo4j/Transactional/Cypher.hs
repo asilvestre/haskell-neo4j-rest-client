@@ -1,5 +1,4 @@
 {-# LANGUAGE OverloadedStrings  #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances  #-}
 
@@ -12,7 +11,7 @@
 -- > withConnection host port $ do
 -- >    ...
 -- >    res <- TC.runTransaction $ do
--- >            -- Queries return a result with columns, rows, a list of graphs and stats with entities created and so
+-- >            -- Queries return a result with columns, rows, a list of graphs and stats
 -- >            result <- T.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
 -- >                              \CREATE p1 = (pere)-[:KNOWS]->(pau) RETURN pere, pau, p1, pere.age" $
 -- >                                M.fromList [("age", TC.newparam (78 :: Int64)),
@@ -25,7 +24,7 @@
 -- >            return (result, result2)
 module Database.Neo4j.Transactional.Cypher (
     -- * Types
-    Result(..), Stats(..), ParamValue(..), Params, newparam, emptyStats,
+    Result(..), Stats(..), ParamValue(..), Params, newparam, emptyStats, TransError, Transaction,
     -- * Sending queries
     loneQuery,  runTransaction, cypher, rollback, commit, keepalive, commitWith,
     -- * Aux functions
@@ -40,7 +39,6 @@ import Control.Applicative ((<$>), (<*>))
 import Data.Aeson ((.=), (.:))
 import Data.List (find)
 import Data.Maybe (fromMaybe)
-import Data.Typeable (Typeable)
 import Text.Read (readMaybe)
 
 import qualified Control.Exception as Exc
@@ -154,13 +152,10 @@ instance J.FromJSON Result where
 transAPI :: S.ByteString
 transAPI = "/db/data/transaction"
 
+-- | Error code and message for a transaction error
 type TransError = (T.Text, T.Text)
 
 type TransactionId = S.ByteString
-
--- | Rollback exception
-data TransactionException = TransactionEndedExc deriving (Show, Typeable, Eq)
-instance Exc.Exception TransactionException
 
 -- | Different transaction states
 data TransState = TransInit | TransStarted R.ReleaseKey TransactionId | TransDone
@@ -199,8 +194,8 @@ queryBody cmd params = J.encode $ J.object ["statements" .= [
 transactionReq :: S.ByteString -> T.Text -> Params -> Neo4j (Either TransError Result)
 transactionReq path cmd params = Neo4j $ \conn -> runResponse <$> httpCreate conn path (queryBody cmd params)
 
--- | Run a transaction and get its final result, has an implicit commit request (or rollback if an exception occurred)
--- | This implicit commit/rollback will only be executed if it hasn't before because of an explicit one
+-- | Run a transaction and get its final result, has an implicit commit request (or rollback if an exception occurred).
+-- This implicit commit/rollback will only be executed if it hasn't before because of an explicit one
 runTransaction :: Transaction a -> Neo4j (Either TransError a)
 runTransaction t = Neo4j $ \conn ->
                      R.runResourceT (fst <$> runStateT (runReaderT (runExceptT $ catchErrors t) conn) TransInit)
@@ -231,8 +226,8 @@ cypher cmd params = do
     where reqNewTrans conn = acquireTrans conn $ httpCreateWithHeaders conn transAPI (queryBody cmd params)
           reqTransCreated conn path = httpCreate conn path (queryBody cmd params)
 
--- | Rollback a transaction
---  after this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
+-- | Rollback a transaction.
+--  After this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
 rollback :: Transaction ()
 rollback = do
     conn <- ask
@@ -245,8 +240,8 @@ rollback = do
                         lift $ put TransDone
         TransDone -> liftIO $ Exc.throw TransactionEndedExc
 
--- | Commit a transaction
---  after this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
+-- | Commit a transaction.
+--  After this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
 commit :: Transaction ()
 commit = do
     conn <- ask
@@ -259,8 +254,8 @@ commit = do
             lift $ put TransDone
         TransDone -> liftIO $ Exc.throw TransactionEndedExc
 
--- | Send a cypher query and commit at the same time, if an error occurs the transaction will be rolled back
---  after this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
+-- | Send a cypher query and commit at the same time, if an error occurs the transaction will be rolled back.
+--  After this, executing rollback, commit, keepalive, cypher in the transaction will result in an exception
 commitWith :: T.Text -> Params -> Transaction Result
 commitWith cmd params = do
       conn <- ask
