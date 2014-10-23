@@ -1495,3 +1495,32 @@ case_cypherTransactionRollback = withConnection host port $ do
                                             ("props", TC.ParamProperties $ M.fromList["age" |: (99 :: Int64)])]
             TC.rollback
             return result
+
+-- | Test a cypher rollback and leave transaction
+case_cypherTransactionRollbackAndLeave :: Assertion
+case_cypherTransactionRollbackAndLeave = withConnection host port $ do
+         res <- TC.runTransaction $ do
+            void $ TC.cypher "CREATE (pepe: PERSON {age: 55})" M.empty
+            result <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
+                              \CREATE p1 = (pere)-[:KNOWS]->(pau) RETURN pere, pau, p1, pere.age" $
+                                M.fromList [("age", TC.newparam (78 :: Int64)),
+                                            ("props", TC.ParamProperties $ M.fromList["age" |: (99 :: Int64)])]
+            TC.rollbackAndLeave "My message"
+            TC.commit
+            TC.rollback
+            return result
+         neo4jEqual (Left ("Rollback", "My message")) res
+
+-- | Test issuing a commits after a rollback
+case_cypherTransactionEnded :: Assertion
+case_cypherTransactionEnded = assertException expException $ withConnection host port $ do
+     void $ TC.runTransaction $ do
+            void $ TC.cypher "CREATE (pepe: PERSON {age: 55})" M.empty
+            result <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
+                              \CREATE p1 = (pere)-[:KNOWS]->(pau) RETURN pere, pau, p1, pere.age" $
+                                M.fromList [("age", TC.newparam (78 :: Int64)),
+                                            ("props", TC.ParamProperties $ M.fromList["age" |: (99 :: Int64)])]
+            TC.rollback
+            TC.commit
+            return result
+    where expException = TransactionEndedExc

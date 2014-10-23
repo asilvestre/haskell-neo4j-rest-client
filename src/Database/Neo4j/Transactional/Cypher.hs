@@ -12,7 +12,7 @@
 -- >    ...
 -- >    res <- TC.runTransaction $ do
 -- >            -- Queries return a result with columns, rows, a list of graphs and stats
--- >            result <- T.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
+-- >            result <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
 -- >                              \CREATE p1 = (pere)-[:KNOWS]->(pau) RETURN pere, pau, p1, pere.age" $
 -- >                                M.fromList [("age", TC.newparam (78 :: Int64)),
 -- >                                            ("props", TC.ParamProperties $ M.fromList["age" |: (99 :: Int64)])]
@@ -26,7 +26,7 @@ module Database.Neo4j.Transactional.Cypher (
     -- * Types
     Result(..), Stats(..), ParamValue(..), Params, newparam, emptyStats, TransError, Transaction,
     -- * Sending queries
-    loneQuery,  runTransaction, cypher, rollback, commit, keepalive, commitWith,
+    loneQuery,  runTransaction, cypher, rollback, commit, keepalive, commitWith, rollbackAndLeave,
     -- * Aux functions
     isSuccess, fromResult, fromSuccess
     ) where
@@ -203,7 +203,8 @@ runTransaction t = Neo4j $ \conn ->
 -- | If a query returns an error we have to stop processing the transaction and make sure it's rolled back
 catchErrors :: Transaction a -> Transaction a
 catchErrors t = catchE t handle
-    where handle err = do
+    where handle err@("Rollback", _) = ExceptT $ return (Left err)
+          handle err = do
                         rollback
                         ExceptT $ return (Left err)
 
@@ -238,6 +239,20 @@ rollback = do
                         liftIO $ rollbackReq conn transId
                         void $ R.unprotect key
                         lift $ put TransDone
+        TransDone -> liftIO $ Exc.throw TransactionEndedExc
+
+-- | Rollback a transaction and stop processing it, set the message that runTransaction will return as error
+rollbackAndLeave :: T.Text -> Transaction ()
+rollbackAndLeave msg = do
+    conn <- ask
+    st <- lift get
+    case st of
+        TransInit -> throwE ("Rollback", msg)
+        TransStarted key transId -> do
+                        liftIO $ rollbackReq conn transId
+                        void $ R.unprotect key
+                        lift $ put TransDone
+                        throwE ("Rollback", msg)
         TransDone -> liftIO $ Exc.throw TransactionEndedExc
 
 -- | Commit a transaction.
