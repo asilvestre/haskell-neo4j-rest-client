@@ -232,18 +232,19 @@ deleteNodeLabel n lbl g = g {nodeLabels = M.insertWith nodeLabelIndexOp location
 
 -- | Filter the nodes of a graph
 nodeFilter :: (Node -> Bool) -> Graph -> Graph
-nodeFilter f g = foldl (\gacc n -> if f n then deleteNode n gacc else gacc) g (M.elems $ nodes g)
+nodeFilter f g = foldl (\gacc n -> if f n then gacc else deleteNode n gacc) g (M.elems $ nodes g)
 
 -- | Filter the relationships of a graph
 relationshipFilter :: (Relationship -> Bool) -> Graph -> Graph
-relationshipFilter f g = foldl (\gacc r -> if f r then deleteRelationship r gacc else gacc) g (M.elems $ rels g)
+relationshipFilter f g = foldl (\gacc r -> if f r then gacc else deleteRelationship r gacc) g (M.elems $ rels g)
 
 -- | Add two graphs resulting in a graph with all the nodes, labels and relationships of both
 -- | If a node/entity is present in both the second one will be chosen
 union :: Graph -> Graph -> Graph
-union ga gb = addRels ga (addNodes ga gb)
-    where addRels g1 g2 = foldl (flip addRelationship) g1 (M.elems $ rels g2)
-          addNodes g1 g2 = foldl (flip addNode) g1 (M.elems $ nodes g2)
+union ga gb = addLabels (addRels (addNodes ga gb) gb) gb
+    where addRels g1 g2 = foldl (\gacc r -> addRelationship r gacc) g1 (getRelationships g2)
+          addNodes g1 g2 = foldl (flip addNode) g1 (getNodes g2)
+          addLabels g1 g2 = foldl (\gacc n -> setNodeLabels n (HS.toList $ getNodeLabels n g2) gacc) g1 (getNodes g2)
 
 -- | Remove the nodes and relationships in the first graph that appear in the second
 difference :: Graph -> Graph -> Graph

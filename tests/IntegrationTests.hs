@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances, TemplateHaskell #-}
 module Main where
 
-import Control.Monad (void)
+import Control.Monad (void, join)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Monoid (Monoid, mappend)
 import Data.Int (Int64)
@@ -76,6 +76,16 @@ port = 7474
 -- | Default Neo4j host
 host :: Hostname
 host = "localhost"
+
+someOtherProperties :: Properties
+someOtherProperties = M.fromList ["hola" |: ("adeu" :: T.Text), "proparray" |: ["a" :: T.Text, "", "adeu"]]
+
+anotherProperties :: Properties
+anotherProperties = M.empty
+
+myRelType :: T.Text
+myRelType = "MYREL"
+
 
 -- | Test connecting to a non-existing server
 case_NoConnection :: Assertion
@@ -298,15 +308,6 @@ case_deleteUnexistingNodeProperty = do
         _ <- deleteProperty n valName
         return ()
     where valName = "noproperty"
-
-someOtherProperties :: Properties
-someOtherProperties = M.fromList ["hola" |: ("adeu" :: T.Text), "proparray" |: ["a" :: T.Text, "", "adeu"]]
-
-anotherProperties :: Properties
-anotherProperties = M.empty
-
-myRelType :: T.Text
-myRelType = "MYREL"
 
 setupRelTests :: Neo4j (Node, Node, Relationship)
 setupRelTests = do
@@ -1524,3 +1525,69 @@ case_cypherTransactionEnded = assertException expException $ withConnection host
             TC.commit
             return result
     where expException = TransactionEndedExc
+
+-- | Test graph union op
+case_graphUnion :: Assertion
+case_graphUnion = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    void $ B.addLabels ["a"] n1
+                    _ <- B.createRelationship "type1" someOtherProperties n1 n2
+                    B.createRelationship "type2" someProperties n2 n1
+                g2 <- B.runBatch $ do
+                    n1 <- B.createNode someOtherProperties
+                    n2 <- B.createNode anotherProperties
+                    void $ B.addLabels ["b"] n1
+                    _ <- B.createRelationship "type1" someOtherProperties n1 n2
+                    B.createRelationship "type2" someProperties n2 n1
+                let g3 = g `G.union` g2
+                let g4 = G.addRelationship (head $ G.getRelationships g) g2
+                neo4jEqual 3 (length $ G.getRelationships g4)
+                neo4jEqual 4 (length $ G.getNodes g3)
+                neo4jEqual 4 (length $ G.getRelationships g3)
+                neo4jBool $ someOtherProperties `elem` map getRelProperties (G.getRelationships g3)
+                neo4jBool $ someProperties `elem` map getRelProperties (G.getRelationships g3)
+                neo4jBool $ someOtherProperties `elem` map getNodeProperties (G.getNodes g3)
+                neo4jBool $ someProperties `elem` map getNodeProperties (G.getNodes g3)
+                neo4jBool $ "type1" `elem` map getRelType (G.getRelationships g3)
+                neo4jBool $ "type2" `elem` map getRelType (G.getRelationships g3)
+                neo4jBool $ "a" `elem` (join $ map (HS.toList . (flip G.getNodeLabels g3)) (G.getNodes g3))
+                neo4jBool $ "b" `elem` (join $ map (HS.toList . (flip G.getNodeLabels g3)) (G.getNodes g3))
+                mapM_ deleteRelationship (G.getRelationships g3)
+                mapM_ deleteNode (G.getNodes g3)
+
+-- | Test graph difference op
+case_graphDifference :: Assertion
+case_graphDifference = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    void $ B.addLabels ["a"] n1
+                    _ <- B.createRelationship "type1" someOtherProperties n1 n2
+                    B.createRelationship "type2" someProperties n2 n1
+                let g2 = g `G.difference` g
+                neo4jEqual 0 (length $ G.getRelationships g2)
+                neo4jEqual 0 (length $ G.getNodes g2)
+                let subGraph = G.deleteNode (head $ G.getNodes g) g
+                let g3 = g `G.difference` (G.deleteRelationship (head $ G.getRelationships subGraph) subGraph)
+                neo4jEqual 1 (length $ G.getRelationships g3)
+                neo4jEqual 1 (length $ G.getNodes g3)
+
+-- | Test graph intersection op
+case_graphIntersection :: Assertion
+case_graphIntersection = withConnection host port $ do
+                g <- B.runBatch $ do
+                    n1 <- B.createNode someProperties
+                    n2 <- B.createNode anotherProperties
+                    void $ B.addLabels ["a"] n1
+                    _ <- B.createRelationship "type1" someOtherProperties n1 n2
+                    B.createRelationship "type2" someProperties n2 n1
+                g2 <- B.runBatch $ do
+                    B.createNode someProperties
+                let g3 = G.addNode (head $ G.getNodes g) g2
+                let g4 = g `G.intersection` (G.addRelationship (head $ G.getRelationships g) g3)
+                neo4jEqual 1 (length $ G.getRelationships g4)
+                neo4jEqual 1 (length $ G.getNodes g4)
+                neo4jEqual (head $ G.getRelationships g) (head $ G.getRelationships g4)
+                neo4jEqual (head $ G.getNodes g) (head $ G.getNodes g4)
