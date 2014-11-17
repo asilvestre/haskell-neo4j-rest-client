@@ -205,8 +205,12 @@ catchErrors :: Transaction a -> Transaction a
 catchErrors t = catchE t handle
     where handle err@("Rollback", _) = ExceptT $ return (Left err)
           handle err = do
-                        rollback
+                        st <- lift get
+                        -- We can get here from commitWith, which runs and commits, in that case rollback is useless
+                        unless (isDone st) rollback
                         ExceptT $ return (Left err)
+          isDone TransDone = True
+          isDone _ = False
 
 -- | Run a cypher query in a transaction, if an error occurs the transaction will stop and rollback
 cypher :: T.Text -> Params -> Transaction Result

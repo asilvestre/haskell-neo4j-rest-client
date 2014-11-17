@@ -1542,8 +1542,6 @@ case_graphUnion = withConnection host port $ do
                     _ <- B.createRelationship "type1" someOtherProperties n1 n2
                     B.createRelationship "type2" someProperties n2 n1
                 let g3 = g `G.union` g2
-                let g4 = G.addRelationship (head $ G.getRelationships g) g2
-                neo4jEqual 3 (length $ G.getRelationships g4)
                 neo4jEqual 4 (length $ G.getNodes g3)
                 neo4jEqual 4 (length $ G.getRelationships g3)
                 neo4jBool $ someOtherProperties `elem` map getRelProperties (G.getRelationships g3)
