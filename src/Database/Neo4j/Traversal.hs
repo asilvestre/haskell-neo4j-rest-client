@@ -2,6 +2,8 @@
 
 module Database.Neo4j.Traversal where
 
+import Data.Default
+
 import Network.HTTP.Base (urlEncodeVars)
 import Control.Exception.Lifted (catch)
 
@@ -33,28 +35,48 @@ data TraversalDesc = TraversalDesc {
     travDepth :: Either Integer T.Text,
     travNodeFilter :: Either ReturnFilter T.Text} deriving (Eq, Show)
 
+instance Default TraversalDesc where
+    def = TraversalDesc {travOrder = BreadthFirst, travRelFilter = [], travUniqueness = Nothing,
+                         travDepth = Left 1, travNodeFilter = Left ReturnAll}
+
+-- | Description of a traversal paging
+data TraversalPaging = TraversalPaging {
+    pageSize :: Integer,
+    pageLeaseSecs :: Integer
+    } deriving (Eq, Show)
+
+instance Default TraversalPaging where
+    def = TraversalPaging {pageSize = 50, pageLeaseSecs = 60}
+
+-- | Data type that holds a result for a paged traversal with the URI to get the rest of the pages
+data PagedTraversal a = Done | More (T.Text, [a]) deriving (Eq, Ord, Show)
+
 -- | Perform a traversal and get the resulting nodes
-traverseGetNodes :: NodeIdentifier a => TraversalOrder -> [RelFilter] -> Maybe Uniqueness ->
-                    Either Integer T.Text -> Either ReturnFilter T.Text -> a -> Neo4j [Node]
-traverseGetNodes order rfilter mUniq tdepth tfilter start = _
+traverseGetNodes :: NodeIdentifier a => TraversalDesc -> a -> Neo4j [Node]
+traverseGetNodes desc start = _
 
 -- | Perform a traversal and get the resulting node and relationship paths
-traverseGetPath :: NodeIdentifier a => TraversalOrder -> [RelFilter] -> Maybe Uniqueness ->
-                    Either Integer T.Text -> Either ReturnFilter T.Text -> a -> Neo4j ([NodePath], [RelPath])
-traverseGetPath order rfilter mUniq tdepth tfilter start = _
+traverseGetPath :: NodeIdentifier a => TraversalDesc -> a -> Neo4j ([NodePath], [RelPath])
+traverseGetPath desc start = _
 
 -- | Perform a traversal and get the resulting node and relationship entities
-traverseGetFullPath :: NodeIdentifier a => TraversalOrder -> [RelFilter] -> Maybe Uniqueness ->
-                       Either Integer T.Text -> Either ReturnFilter T.Text -> a -> Neo4j ([Node], [Relationship])
-traverseGetFullPath order rfilter mUniq tdepth tfilter start = _
+traverseGetFullPath :: NodeIdentifier a => TraversalDesc -> a -> Neo4j ([Node], [Relationship])
+traverseGetFullPath desc start = _
 
 -- | Perform a traversal and get the resulting relationship entities
-traverseGetRels :: NodeIdentifier a => TraversalOrder -> Direction -> Maybe Uniqueness ->
-                    Either Integer T.Text -> Either ReturnFilter T.Text -> a -> Neo4j [Relationship]
-traverseGetRels order dir mUniq tdepth tfilter start = _
+traverseGetRels :: NodeIdentifier a => TraversalDesc -> a -> Neo4j [Relationship]
+traverseGetRels desc start = _
 
+-- | Get the values of a paged traversal result
+getPagedValues :: PagedTraversal a -> [a]
+getPagedValues Done = []
+getPagedValues (More (_, r))  = r
+
+-- | Get the next page of values from a traversal result
+nextTraversalPage :: PagedTraversal a -> Neo4j (PagedTraversal a)
+nextTraversalPage Done = return Done
+nextTraversalPage (More (pagingUri, _)) = _
 
 -- | Perform a paged traversal and get the resulting nodes
-pagedTraverseGetNodes :: NodeIdentifier a => TraversalOrder -> [RelFilter] -> Maybe Uniqueness ->
-                         Either Integer T.Text -> Either ReturnFilter T.Text -> a -> Neo4j [Node]
-pagedTraverseGetNodes order rfilter mUniq tdepth tfilter start = _
+pagedTraverseGetNodes :: NodeIdentifier a => TraversalDesc -> TraversalPaging -> a -> Neo4j (PagedTraversal Node)
+pagedTraverseGetNodes desc paging start = _

@@ -57,7 +57,8 @@ Test-Suite test-haskell-neo4j-rest-client
                      lifted-base ==0.2.*,
                      hashable ==1.2.*,
                      monad-control >=0.3 && <1.1,
-                     mtl ==2.2.*
+                     mtl ==2.2.*,
+                     data-default ==0.5.*
 
 library
   hs-source-dirs:      src
@@ -85,4 +86,5 @@ library
                        hashable ==1.2.*,
                        transformers-base ==0.4.*,
                        monad-control >=0.3 && <1.1,
-                       mtl ==2.2.*
+                       mtl ==2.2.*,
+                       data-default ==0.5.*
