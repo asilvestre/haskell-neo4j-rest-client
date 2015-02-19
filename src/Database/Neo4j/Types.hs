@@ -188,7 +188,7 @@ runNodeIdentifier = TE.encodeUtf8 . runNodePath . getNodePath
 type RelationshipType = T.Text
 
 -- | Relationship direction
-data Direction = Outgoing | Incoming | Any
+data Direction = Outgoing | Incoming | Any deriving (Eq, Show)
 
 -- | Type for a relationship location
 newtype RelUrl = RelUrl {runRelUrl :: T.Text} deriving (Show, Eq, Generic)

@@ -56,7 +56,7 @@ Test-Suite test-haskell-neo4j-rest-client
                      HTTP ==4000.2.*,
                      lifted-base ==0.2.*,
                      hashable ==1.2.*,
-                     monad-control ==0.3.*,
+                     monad-control >=0.3 && <1.1,
                      mtl ==2.2.*
 
 library
@@ -66,7 +66,7 @@ library
   other-modules:       Database.Neo4j.Types, Database.Neo4j.Http, Database.Neo4j.Node, Database.Neo4j.Relationship,
                        Database.Neo4j.Property, Database.Neo4j.Label, Database.Neo4j.Index, Database.Neo4j.Batch.Node,
                        Database.Neo4j.Batch.Relationship, Database.Neo4j.Batch.Property, Database.Neo4j.Types,
-                       Database.Neo4j.Batch.Label, Database.Neo4j.Batch.Types
+                       Database.Neo4j.Batch.Label, Database.Neo4j.Batch.Types, Database.Neo4j.Traversal
   build-depends:       base >=4.6 && <4.8,
                        containers ==0.5.*,
                        text >= 1.1 && < 1.3,
@@ -84,5 +84,5 @@ library
                        lifted-base ==0.2.*,
                        hashable ==1.2.*,
                        transformers-base ==0.4.*,
-                       monad-control ==0.3.*,
+                       monad-control >=0.3 && <1.1,
                        mtl ==2.2.*
