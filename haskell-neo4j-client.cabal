@@ -47,7 +47,8 @@ Test-Suite test-haskell-neo4j-rest-client
                    , http-types                  == 0.8.*
                    , resourcet                   == 1.1.*
                    , data-default                == 0.5.*
-                   , transformers                == 0.4.*
+                   , transformers                >  0.3        && < 0.5
+                   , transformers-compat         >  0.3        && < 0.5
                    , aeson                       >= 0.7        && < 0.9
                    , vector                      == 0.10.*
                    , scientific                  == 0.3.*
@@ -75,7 +76,8 @@ library
                      , bytestring            == 0.10.*
                      , resourcet             == 1.1.*
                      , data-default          == 0.5.*
-                     , transformers          == 0.4.*
+                     , transformers          >  0.3        && < 0.5
+                     , transformers-compat   >  0.3        && < 0.5
                      , aeson                 >= 0.7        && < 0.9
                      , vector                == 0.10.*
                      , scientific            == 0.3.*
