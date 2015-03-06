@@ -48,6 +48,8 @@ data TraversalPaging = TraversalPaging {
 instance Default TraversalPaging where
     def = TraversalPaging {pageSize = 50, pageLeaseSecs = 60}
 
+data Path = PathLink !NodePath !RelPath !Path | PathEnd !NodePath
+
 -- | Data type that holds a result for a paged traversal with the URI to get the rest of the pages
 data PagedTraversal a = Done | More (T.Text, [a]) deriving (Eq, Ord, Show)
 
