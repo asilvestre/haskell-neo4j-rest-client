@@ -63,10 +63,10 @@ Test-Suite test-haskell-neo4j-rest-client
 library
   hs-source-dirs:      src
   exposed-modules:     Database.Neo4j, Database.Neo4j.Graph, Database.Neo4j.Batch, Database.Neo4j.Cypher,
-                       Database.Neo4j.Transactional.Cypher
-  other-modules:       Database.Neo4j.Types, Database.Neo4j.Http, Database.Neo4j.Node, Database.Neo4j.Relationship,
+                       Database.Neo4j.Transactional.Cypher, Database.Neo4j.Types
+  other-modules:       Database.Neo4j.Http, Database.Neo4j.Node, Database.Neo4j.Relationship,
                        Database.Neo4j.Property, Database.Neo4j.Label, Database.Neo4j.Index, Database.Neo4j.Batch.Node,
-                       Database.Neo4j.Batch.Relationship, Database.Neo4j.Batch.Property, Database.Neo4j.Types,
+                       Database.Neo4j.Batch.Relationship, Database.Neo4j.Batch.Property,
                        Database.Neo4j.Batch.Label, Database.Neo4j.Batch.Types
   build-depends:       base                  >= 4.6        && < 4.8
                      , containers            == 0.5.*
