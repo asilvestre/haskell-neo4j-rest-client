@@ -1,5 +1,5 @@
 name:                haskell-neo4j-client
-version:             0.3.0.11
+version:             0.3.0.12
 synopsis:            A Haskell neo4j client
 description:         
     Library to interact with Neo4j databases. 
@@ -47,7 +47,7 @@ Test-Suite test-haskell-neo4j-rest-client
                    , http-types                  == 0.8.*
                    , resourcet                   == 1.1.*
                    , data-default                == 0.5.*
-                   , transformers                >  0.3        && < 0.5
+                   , transformers                >= 0.3        && < 0.5
                    , transformers-compat         >  0.3        && < 0.5
                    , aeson                       >= 0.7        && < 0.9
                    , vector                      == 0.10.*
@@ -76,7 +76,7 @@ library
                      , bytestring            == 0.10.*
                      , resourcet             == 1.1.*
                      , data-default          == 0.5.*
-                     , transformers          >  0.3        && < 0.5
+                     , transformers          >= 0.3        && < 0.5
                      , transformers-compat   >  0.3        && < 0.5
                      , aeson                 >= 0.7        && < 0.9
                      , vector                == 0.10.*
