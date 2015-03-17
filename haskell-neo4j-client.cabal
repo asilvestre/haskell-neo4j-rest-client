@@ -57,7 +57,6 @@ Test-Suite test-haskell-neo4j-rest-client
                    , HTTP                        == 4000.2.*
                    , lifted-base                 == 0.2.*
                    , hashable                    == 1.2.*
-                   , monad-control               == 0.3.*
                    , mtl                         >= 2.1        && < 2.3
 
 library
@@ -86,5 +85,4 @@ library
                      , lifted-base           == 0.2.*
                      , hashable              == 1.2.*
                      , transformers-base     == 0.4.*
-                     , monad-control         == 0.3.*
                      , mtl                   >= 2.1        && < 2.3
