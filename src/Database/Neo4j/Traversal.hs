@@ -2,7 +2,13 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE FlexibleInstances  #-}
 
-module Database.Neo4j.Traversal where
+module Database.Neo4j.Traversal (
+    Uniqueness(..), TraversalOrder(..), ReturnFilter(..), RelFilter, TraversalDesc(..), TraversalPaging (..),
+    ConcreteDirection(..), Path(..), IdPath, FullPath, PagedTraversal,
+    pathNodes, pathRels,
+    traverseGetNodes, traverseGetRels, traverseGetPath, traverseGetFullPath,
+    getPagedValues, nextTraversalPage, pagedTraversalDone,
+    pagedTraverseGetNodes, pagedTraverseGetRels, pagedTraverseGetPath, pagedTraverseGetFullPath) where
 
 import Data.Default
 
@@ -192,6 +198,11 @@ nextTraversalPage (More pagingUri _) = Neo4j $ \conn -> do
     return $ case mr of
                Nothing -> Done
                Just r -> More pagingUri r
+
+-- | Whether a paged traversal is done
+pagedTraversalDone :: PagedTraversal a -> Bool
+pagedTraversalDone Done = True
+pagedTraversalDone _ = False
 
 -- | Generate the query string associated to a paging description
 pagingQs :: TraversalPaging -> S.ByteString
