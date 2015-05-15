@@ -7,16 +7,18 @@ module Database.Neo4j.Traversal where
 import Data.Default
 
 import Control.Applicative
-import Control.Exception.Lifted (catch)
 import Control.Monad (mzero)
-import Network.HTTP.Base (urlEncodeVars)
-
 import Data.Aeson ((.=), (.:))
+import Data.List (find)
+import Data.Maybe (fromMaybe)
+import Data.String (fromString)
+
 import qualified Data.Aeson as J
 import qualified Data.ByteString.Char8 as S
 import qualified Data.ByteString.Lazy as L
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Network.HTTP.Types as HT
 
 import Database.Neo4j.Types
 import Database.Neo4j.Http
@@ -101,7 +103,6 @@ instance J.FromJSON ConcreteDirection where
     parseJSON (J.String "<-" ) =  return In
     parseJSON _ = mzero
 
-
 -- | Data type to describe a path in a graph, that is a single node or nodes interleaved with relationships
 data Path a b = PathLink !a !b ConcreteDirection !(Path a b) | PathEnd !a deriving (Eq, Ord, Show)
 
@@ -130,8 +131,8 @@ instance J.FromJSON IdPath where
                     else fail $ "Wrong path nodes: " <> show nodes <> " rels: " <> show rels <> " dirs: " <> show dirs
         where buildPath [n] [] [] = PathEnd n
               buildPath (n:ns) (r:rs) (d:ds) = PathLink n r d (buildPath ns rs ds)
+              buildPath _ _ _ = undefined
     parseJSON _ = fail "wrong type for path"
-
 
 -- | Path that its data are full nodes and relationships, not only their id's
 type FullPath = Path Node Relationship
@@ -148,43 +149,75 @@ instance J.FromJSON FullPath where
                     else fail $ "Wrong path nodes: " <> show nodes <> " rels: " <> show rels <> " dirs: " <> show dirs
         where buildPath [n] [] [] = PathEnd n
               buildPath (n:ns) (r:rs) (d:ds) = PathLink n r d (buildPath ns rs ds)
+              buildPath _ _ _ = undefined
     parseJSON _ = fail "wrong type for path"
 
 -- | Data type that holds a result for a paged traversal with the URI to get the rest of the pages
-data PagedTraversal a = Done | More (T.Text, [a]) deriving (Eq, Ord, Show)
+data PagedTraversal a = Done | More S.ByteString [a] deriving (Eq, Ord, Show)
 
 -- | Get the path for a traversal starting from a node
 traversalApi :: NodeIdentifier a => a -> S.ByteString
 traversalApi n = TE.encodeUtf8 $ (runNodePath $ getNodePath n) <> "/traverse"
 
+-- | Perform a traversal operation
+traverse :: (NodeIdentifier a, J.FromJSON b) => S.ByteString -> TraversalDesc -> a -> Neo4j [b]
+traverse path desc start = Neo4j $ \conn -> httpCreate conn (traversalApi start <> path) (traversalReqBody desc)
+
 -- | Perform a traversal and get the resulting nodes
 traverseGetNodes :: NodeIdentifier a => TraversalDesc -> a -> Neo4j [Node]
-traverseGetNodes desc start = Neo4j $ \conn -> httpCreate conn (traversalApi start <> "/node") (traversalReqBody desc)
-
--- | Perform a traversal and get the resulting node and relationship paths
-traverseGetPath :: NodeIdentifier a => TraversalDesc -> a -> Neo4j [IdPath]
-traverseGetPath desc start = Neo4j $ \conn -> httpCreate conn (traversalApi start <> "/path") (traversalReqBody desc)
-
--- | Perform a traversal and get the resulting node and relationship entities
-traverseGetFullPath :: NodeIdentifier a => TraversalDesc -> a -> Neo4j [FullPath]
-traverseGetFullPath desc start = Neo4j $ \conn -> httpCreate conn (traversalApi start <> "/fullpath")
-                                                  (traversalReqBody desc)
+traverseGetNodes = traverse "/node"
 
 -- | Perform a traversal and get the resulting relationship entities
 traverseGetRels :: NodeIdentifier a => TraversalDesc -> a -> Neo4j [Relationship]
-traverseGetRels desc start = Neo4j $ \conn ->
-                                       httpCreate conn (traversalApi start <> "/relationship") (traversalReqBody desc)
+traverseGetRels = traverse "/relationship"
+
+-- | Perform a traversal and get the resulting node and relationship paths
+traverseGetPath :: NodeIdentifier a => TraversalDesc -> a -> Neo4j [IdPath]
+traverseGetPath = traverse "/path"
+
+-- | Perform a traversal and get the resulting node and relationship entities
+traverseGetFullPath :: NodeIdentifier a => TraversalDesc -> a -> Neo4j [FullPath]
+traverseGetFullPath = traverse "/fullpath"
 
 -- | Get the values of a paged traversal result
 getPagedValues :: PagedTraversal a -> [a]
 getPagedValues Done = []
-getPagedValues (More (_, r))  = r
+getPagedValues (More _ r)  = r
 
 -- | Get the next page of values from a traversal result
-nextTraversalPage :: PagedTraversal a -> Neo4j (PagedTraversal a)
+nextTraversalPage :: J.FromJSON a => PagedTraversal a -> Neo4j (PagedTraversal a)
 nextTraversalPage Done = return Done
-nextTraversalPage (More (pagingUri, _)) = _
+nextTraversalPage (More pagingUri _) = Neo4j $ \conn -> do
+    mr <- httpRetrieve conn pagingUri
+    return $ case mr of
+               Nothing -> Done
+               Just r -> More pagingUri r
+
+-- | Generate the query string associated to a paging description
+pagingQs :: TraversalPaging -> S.ByteString
+pagingQs (TraversalPaging pSize leaseSecs) = "?pageSize=" <> showBs pSize <> "&leaseTime=" <> showBs leaseSecs
+    where showBs = fromString .show
+
+-- | Perform a paged traversal and get the resulting nodes
+pagedTraversal :: (NodeIdentifier a, J.FromJSON b) => S.ByteString -> TraversalDesc -> TraversalPaging -> a
+               -> Neo4j (PagedTraversal b)
+pagedTraversal path desc paging start = Neo4j $ \conn -> do
+    (r, headers) <- httpCreateWithHeaders conn (traversalApi start <> path <> pagingQs paging) (traversalReqBody desc)
+    let location = fromMaybe "" (snd <$> find ((==HT.hLocation) . fst) headers)
+    return (More location r)
 
 -- | Perform a paged traversal and get the resulting nodes
 pagedTraverseGetNodes :: NodeIdentifier a => TraversalDesc -> TraversalPaging -> a -> Neo4j (PagedTraversal Node)
-pagedTraverseGetNodes desc paging start = _
+pagedTraverseGetNodes = pagedTraversal "/node"
+
+-- | Perform a paged traversal and get the resulting relationships 
+pagedTraverseGetRels :: NodeIdentifier a => TraversalDesc -> TraversalPaging -> a -> Neo4j(PagedTraversal Relationship)
+pagedTraverseGetRels = pagedTraversal "/relationship"
+
+-- | Perform a paged traversal and get the resulting id paths 
+pagedTraverseGetPath :: NodeIdentifier a => TraversalDesc -> TraversalPaging -> a -> Neo4j (PagedTraversal IdPath)
+pagedTraverseGetPath = pagedTraversal "/path"
+
+-- | Perform a paged traversal and get the resulting paths with full entities
+pagedTraverseGetFullPath :: NodeIdentifier a => TraversalDesc -> TraversalPaging -> a -> Neo4j(PagedTraversal FullPath)
+pagedTraverseGetFullPath = pagedTraversal "/fullpath"
