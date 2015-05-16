@@ -2,11 +2,14 @@
 {-# LANGUAGE FlexibleInstances, TemplateHaskell #-}
 module Main where
 
+import Control.Applicative ((<$>))
 import Control.Monad (void, join)
 import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Default
 import Data.Monoid (Monoid, mappend)
 import Data.Int (Int64)
 import Data.Maybe (fromJust)
+import Data.String (fromString)
 
 import qualified Data.Aeson as J
 import qualified Data.ByteString as S
@@ -15,6 +18,7 @@ import qualified Data.HashSet as HS
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
+import qualified Data.List as L
 
 import Control.Exception (handle)
 import Test.Framework.TH (defaultMainGenerator)
@@ -26,6 +30,7 @@ import qualified Database.Neo4j.Batch as B
 import qualified Database.Neo4j.Cypher as C
 import qualified Database.Neo4j.Graph as G
 import qualified Database.Neo4j.Transactional.Cypher as TC
+import qualified Database.Neo4j.Traversal as T
 
 (<>) :: Monoid a => a -> a -> a
 (<>) = mappend
@@ -1589,3 +1594,86 @@ case_graphIntersection = withConnection host port $ do
                 neo4jEqual 1 (length $ G.getNodes g4)
                 neo4jEqual (head $ G.getRelationships g) (head $ G.getRelationships g4)
                 neo4jEqual (head $ G.getNodes g) (head $ G.getNodes g4)
+
+-- | Environment for traversal tests
+setUpTraversalTest :: Neo4j G.Graph
+setUpTraversalTest = B.runBatch $ do
+                            root <- _createNode "Root"
+                            johan <- _createNode "Johan"
+                            mattias <- _createNode "Mattias"
+                            emil <- _createNode "Emil"
+                            peter <- _createNode "Peter"
+                            tobias <- _createNode "Tobias"
+                            sara <- _createNode "Sara"
+                            _createRel "Root-Johan" "knows" root johan
+                            _createRel "Root-Mattias" "knows" root mattias 
+                            _createRel "Johan-Emil" "knows" johan emil 
+                            _createRel "Emil-Peter" "knows" emil peter
+                            _createRel "Emil-Tobias" "knows" emil tobias
+                            _createRel "Tobias-Sara" "loves" tobias sara
+    where _createNode name = B.createNamedNode name $ M.fromList ["name" |: (fromString name :: T.Text)]
+          _createRel name t from to = void $ B.createNamedRelationship name t M.empty from to
+
+-- | clean up a traversal test
+cleanUpTraversalTest :: G.Graph -> Neo4j ()
+cleanUpTraversalTest g = void $ B.runBatch $ do
+                            mapM_ B.deleteRelationship (G.getRelationships g)
+                            mapM_ B.deleteNode (G.getNodes g)
+
+-- | Test a default traversal returning nodes
+case_defaultTraversalNodes :: Assertion
+case_defaultTraversalNodes = withConnection host port $ do
+    g <- setUpTraversalTest
+    let start = fromJust $ G.getNamedNode "Root" g
+    ns <- T.traverseGetNodes def start
+    let expected = map (\n -> fromJust $ G.getNamedNode n g) ["Root", "Mattias", "Johan"]
+    neo4jEqual (L.sort expected) (L.sort ns)
+    cleanUpTraversalTest g
+
+-- | Test a default traversal returning relationships
+case_defaultTraversalRels :: Assertion
+case_defaultTraversalRels = withConnection host port $ do
+    g <- setUpTraversalTest
+    let start = fromJust $ G.getNamedNode "Root" g
+    rs <- T.traverseGetRels def start
+    let expected = map (\n -> fromJust $ G.getNamedRelationship n g) ["Root-Mattias", "Root-Johan"]
+    neo4jEqual (L.sort expected) (L.sort rs)
+    cleanUpTraversalTest g
+
+-- | Test a default traversal returning id paths
+case_defaultTraversalIdPath :: Assertion
+case_defaultTraversalIdPath = withConnection host port $ do
+    g <- setUpTraversalTest
+    let start = fromJust $ G.getNamedNode "Root" g
+    ps <- L.sort <$> T.traverseGetPath def start
+    neo4jEqual 3 (length ps)
+    -- check we've received the expected paths
+    let _getNodePath = \name -> nodePath $ fromJust $ G.getNamedNode name g
+    let _getRelPath = \name -> relPath $ fromJust $ G.getNamedRelationship name g
+    let checkPath = \p nodes rels -> do
+        neo4jEqual (map _getNodePath nodes) (T.pathNodes p)
+        let resRels = T.pathRels p
+        neo4jEqual (map _getRelPath (map fst rels)) (map fst resRels)
+        neo4jEqual (map snd rels) (map snd resRels)
+    checkPath (ps !! 0) ["Root"] []
+    checkPath (ps !! 1) ["Root", "Johan"] [("Root-Johan", T.Out)]
+    checkPath (ps !! 2) ["Root", "Mattias"] [("Root-Mattias", T.Out)]
+    cleanUpTraversalTest g
+
+-- | Test a default traversal returning full paths
+case_defaultTraversalFullPath :: Assertion
+case_defaultTraversalFullPath = withConnection host port $ do
+    g <- setUpTraversalTest
+    let start = fromJust $ G.getNamedNode "Root" g
+    ps <- L.sort <$> T.traverseGetFullPath def start
+    neo4jEqual 3 (length ps)
+    -- check we've received the expected paths
+    let _getNode = \name -> fromJust $ G.getNamedNode name g
+    let _getRel = \name -> fromJust $ G.getNamedRelationship name g
+    let checkPath = \p nodes rels -> do
+        neo4jEqual (map _getNode nodes) (T.pathNodes p)
+        neo4jEqual (map _getRel rels) (T.pathRels p)
+    checkPath (ps !! 0) ["Root"] []
+    checkPath (ps !! 1) ["Root", "Johan"] ["Root-Johan"]
+    checkPath (ps !! 2) ["Root", "Mattias"] ["Root-Mattias"]
+    cleanUpTraversalTest g

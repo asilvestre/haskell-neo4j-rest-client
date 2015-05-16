@@ -40,11 +40,26 @@ createRelationship t props nodefrom nodeto = nextState cmd
           body = J.object ["to" .= getNodeBatchId nodeto, "type" .= t, "data" .= J.toJSON props]
           parser r = G.addRelationship (tryParseBody r)
 
+-- | Create a new relationship with a type and a set of properties and assign it an identifier
+createNamedRelationship :: (NodeBatchIdentifier a, NodeBatchIdentifier b) => String -> RelationshipType -> Properties
+                        -> a -> b -> Batch (BatchFuture Relationship)
+createNamedRelationship name t props nodefrom nodeto = nextState cmd
+    where cmd = defCmd{cmdMethod = HT.methodPost, cmdPath = path, cmdBody = J.toJSON body, cmdParse = parser}
+          path = getNodeBatchId nodefrom <> "/relationships"
+          body = J.object ["to" .= getNodeBatchId nodeto, "type" .= t, "data" .= J.toJSON props]
+          parser r = G.addNamedRelationship name (tryParseBody r)
+
 -- | Refresh a relationship entity with the contents in the DB
 getRelationship :: RelBatchIdentifier r => r -> Batch (BatchFuture Relationship)
 getRelationship rel = nextState cmd
     where cmd = defCmd{cmdMethod = HT.methodGet, cmdPath = getRelBatchId rel, cmdBody = "", cmdParse = parser}
           parser jr = G.addRelationship (tryParseBody jr)
+
+-- | Refresh a relationship entity with the contents in the DB and assign it an identifier
+getNamedRelationship :: RelBatchIdentifier r => String -> r -> Batch (BatchFuture Relationship)
+getNamedRelationship name rel = nextState cmd
+    where cmd = defCmd{cmdMethod = HT.methodGet, cmdPath = getRelBatchId rel, cmdBody = "", cmdParse = parser}
+          parser jr = G.addNamedRelationship name (tryParseBody jr)
 
 -- | Get the "node from" from a relationship from the DB
 getRelationshipFrom :: Relationship -> Batch (BatchFuture Node)

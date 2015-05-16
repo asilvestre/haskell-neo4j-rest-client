@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings  #-}
 
+
 -- | Module to handle 'Graph' objects. These have information about a group of nodes, relationships,
 --  and information about labels per node and nodes per label.
 --  Notice a graph can have relationships and at the same time not have some of the nodes of those
@@ -9,10 +10,10 @@ module Database.Neo4j.Graph (
     -- * General objects
     Graph, LabelSet, empty,
     -- * Handling nodes in the graph object
-    addNode, hasNode, deleteNode, getNodes, getNode, getNodeFrom, getNodeTo,
+    addNode, addNamedNode, hasNode, deleteNode, getNodes, getNode, getNamedNode, getNodeFrom, getNodeTo,
     -- * Handling properties in the graph object
-    getRelationships, hasRelationship, addRelationship, deleteRelationship, getRelationshipNodeFrom,
-    getRelationshipNodeTo, getRelationship,
+    getRelationships, hasRelationship, addRelationship, addNamedRelationship, deleteRelationship,
+    getRelationshipNodeFrom, getRelationshipNodeTo, getRelationship, getNamedRelationship,
     -- ** Handling orphaned relationships #orphan#
     getOrphansFrom, getOrphansTo, cleanOrphanRelationships,
     -- * Handling properties
@@ -50,17 +51,26 @@ type RelSet = HS.HashSet RelPath
 type NodeRelIndex = M.HashMap NodePath RelSet
 
 data Graph = Graph {nodes :: NodeIndex, labels :: LabelNodeIndex, rels :: RelIndex,
-                    nodeLabels :: NodeLabelIndex, nodeFromRels :: NodeRelIndex, nodeToRels :: NodeRelIndex
+                    nodeLabels :: NodeLabelIndex, nodeFromRels :: NodeRelIndex, nodeToRels :: NodeRelIndex,
+                    namedNodes :: M.HashMap String NodePath, namedRels :: M.HashMap String RelPath,
+                    nodeNames :: M.HashMap NodePath String, relNames :: M.HashMap RelPath String
                     } deriving (Eq, Show)
 
 -- | Create an empty graph
 empty :: Graph
 empty = Graph {nodes = M.empty, labels = M.empty, rels = M.empty, nodeLabels = M.empty, nodeFromRels = M.empty,
-               nodeToRels = M.empty}
+               nodeToRels = M.empty, namedNodes = M.empty, namedRels = M.empty, nodeNames = M.empty,
+               relNames = M.empty}
 
 -- | Add a node to the graph
 addNode :: Node -> Graph -> Graph
 addNode n g = g {nodes = M.insert (getNodePath n) n (nodes g)}
+
+-- | Add a node to the graph with an identifier
+addNamedNode :: String -> Node -> Graph -> Graph
+addNamedNode name n g = addNode n $ g {nodeNames = M.insert _nodePath name $ nodeNames g,
+                                       namedNodes = M.insert name _nodePath $ namedNodes g}
+    where _nodePath = getNodePath n
 
 -- | Set the properties of a node or relationship in the graph, if not present it won't do anything
 setProperties :: EntityIdentifier a => a -> Properties -> Graph -> Graph
@@ -118,6 +128,12 @@ hasNode n g = getNodePath n `M.member` nodes g
 getNode :: NodeIdentifier a => a -> Graph -> Maybe Node
 getNode n g = getNodePath n `M.lookup` nodes g
 
+-- | Get a node by name in the graph, if any
+getNamedNode :: String -> Graph -> Maybe Node
+getNamedNode name g = do
+    nodepath <- getNodePath <$> name `M.lookup` namedNodes g
+    nodepath `M.lookup` nodes g
+
 -- | Get outgoing relationships from a node
 getNodeFrom :: NodeIdentifier a => a -> Graph -> Maybe [Relationship]
 getNodeFrom n g = join $ sequence <$> filter (/=Nothing) <$> map getRel <$> fromrels
@@ -142,11 +158,23 @@ hasRelationship r g = getRelPath r `M.member` rels g
 deleteNode :: NodeIdentifier a => a -> Graph -> Graph
 deleteNode n g = g {nodes = M.delete nodeLoc (nodes g),
                  labels = cleanLabelNodeIndex $ removeNodeFromLabels (labels g) labelsForNode,
-                 nodeLabels = M.delete nodeLoc (nodeLabels g)}
+                 nodeLabels = M.delete nodeLoc (nodeLabels g), nodeNames = newNodeNames, namedNodes = newNamedNodes}
     where labelsForNode = M.lookupDefault HS.empty nodeLoc (nodeLabels g)
+          nodepath = getNodePath n
           nodeLoc = getNodePath n
           removeNodeFromLabels = HS.foldl' (\acc x -> M.insertWith (\_ -> HS.delete nodeLoc) x HS.empty acc)
           cleanLabelNodeIndex = M.filter (/=HS.empty) 
+          nodenames = nodeNames g
+          (mNodeName, newNodeNames) = fromMaybe (Nothing, nodenames) $ do
+              name <- nodepath `M.lookup` nodenames
+              return (Just name, nodepath `M.delete` nodenames)
+          namednodes = namedNodes g
+          newNamedNodes = fromMaybe namednodes $ do
+              nodename <- mNodeName
+              _nodepath <- nodename `M.lookup` namednodes
+              return $ if nodepath == _nodepath
+                          then nodename `M.delete` namednodes
+                          else namednodes
 
 -- | Add a relationship to the graph
 addRelationship :: Relationship -> Graph -> Graph
@@ -157,6 +185,12 @@ addRelationship r g = g {rels = M.insert (getRelPath r) r (rels g),
           pathTo = getNodePath . relTo
           relpath = getRelPath r
 
+-- | Add a relationship to the graph with an identified
+addNamedRelationship :: String -> Relationship -> Graph -> Graph
+addNamedRelationship name r g = addRelationship r $ g {relNames = M.insert _relPath name $ relNames g,
+                                                       namedRels = M.insert name _relPath $ namedRels g}
+    where _relPath = getRelPath r
+
 -- | Get a list with all the relationships in the graph
 getRelationships :: Graph -> [Relationship]
 getRelationships g = M.elems $ rels g
@@ -164,6 +198,12 @@ getRelationships g = M.elems $ rels g
 -- | Get a relationship in the graph
 getRelationship :: RelIdentifier a => a -> Graph -> Maybe Relationship
 getRelationship r g = getRelPath r `M.lookup` rels g
+
+-- | Get a relationship by name in the graph, if any
+getNamedRelationship :: String -> Graph -> Maybe Relationship
+getNamedRelationship name g = do
+    relpath <- getRelPath <$> name `M.lookup` namedRels g
+    relpath `M.lookup` rels g
 
 -- | Get relationships missing their "from" node
 getOrphansFrom :: Graph -> [Relationship]
@@ -183,14 +223,26 @@ cleanOrphanRelationships g = foldl (flip deleteRelationship) g (getOrphansFrom g
 deleteRelationship :: RelIdentifier a => a -> Graph -> Graph
 deleteRelationship r g = g {rels = M.delete (getRelPath r) (rels g),
                             nodeFromRels = removeNodeRef (nodeFromRels g) pathFrom,
-                            nodeToRels = removeNodeRef (nodeToRels g) pathTo}
+                            nodeToRels = removeNodeRef (nodeToRels g) pathTo,
+                            relNames = newRelNames, namedRels = newNamedRels}
     where updNodeRel = const $ HS.delete (getRelPath r)
-          rel = M.lookup (getRelPath r) (rels g)
+          relpath = getRelPath r
+          rel = M.lookup relpath (rels g)
           pathFrom = (getNodePath . relFrom) <$> rel
           pathTo = (getNodePath . relTo) <$> rel
           removeNodeRef nodeRel (Just nodepath) = M.insertWith updNodeRel nodepath HS.empty nodeRel
           removeNodeRef nodeRel Nothing = nodeRel
-
+          relnames = relNames g
+          (mRelName, newRelNames) = fromMaybe (Nothing, relnames) $ do
+              name <- relpath `M.lookup` relnames
+              return (Just name, relpath `M.delete` relnames)
+          namedrels = namedRels g
+          newNamedRels = fromMaybe namedrels $ do
+              relname <- mRelName
+              _relpath <- relname `M.lookup` namedrels
+              return $ if relpath == _relpath
+                 then  relname `M.delete` namedrels
+                 else namedrels
 
 -- | Get the "node from" from a relationship
 getRelationshipNodeFrom :: Relationship -> Graph -> Maybe Node
@@ -241,22 +293,36 @@ relationshipFilter f g = foldl (\gacc r -> if f r then gacc else deleteRelations
 -- | Add two graphs resulting in a graph with all the nodes, labels and relationships of both
 -- | If a node/entity is present in both the second one will be chosen
 union :: Graph -> Graph -> Graph
-union ga gb = addLabels (addRels (addNodes ga gb) gb) gb
+union ga gb = mergeRelNames (mergeNodeNames (addLabels (addRels (addNodes ga gb) gb) gb) gb) gb
     where addRels g1 g2 = foldl (\gacc r -> addRelationship r gacc) g1 (getRelationships g2)
           addNodes g1 g2 = foldl (flip addNode) g1 (getNodes g2)
           addLabels g1 g2 = foldl (\gacc n -> setNodeLabels n (HS.toList $ getNodeLabels n g2) gacc) g1 (getNodes g2)
+          mergeNodeNames g1 g2 = g1 {nodeNames = nodeNames g2 `M.union` nodeNames g1,
+                                     namedNodes = namedNodes g2 `M.union` namedNodes g1}
+          mergeRelNames g1 g2 = g1 {relNames = relNames g2 `M.union` relNames g1,
+                                    namedRels = namedRels g2 `M.union` namedRels g1}
 
 -- | Remove the nodes and relationships in the first graph that appear in the second
 difference :: Graph -> Graph -> Graph
-difference ga gb = relationshipFilter relFilterFunc (nodeFilter nodeFilterFunc ga)
+difference ga gb = relationshipFilter relFilterFunc (nodeFilter nodeFilterFunc ga) {
+        nodeNames = newNodeNames, namedNodes = newNamedNodes, relNames = newRelNames, namedRels = newNamedRels}
     where relFilterFunc r = not $ hasRelationship r gb
           nodeFilterFunc n = not $ hasNode n gb
+          newNodeNames = nodeNames ga `M.difference` nodeNames gb
+          newNamedNodes = namedNodes ga `M.difference` namedNodes gb
+          newRelNames = relNames ga `M.difference` relNames gb
+          newNamedRels = namedRels ga `M.difference` namedRels gb
 
 -- | Have a graph that only has nodes and relationships that are present in both
 intersection :: Graph -> Graph -> Graph
-intersection ga gb = relationshipFilter relFilterFunc (nodeFilter nodeFilterFunc ga)
+intersection ga gb = relationshipFilter relFilterFunc (nodeFilter nodeFilterFunc ga) {
+        nodeNames = newNodeNames, namedNodes = newNamedNodes, relNames = newRelNames, namedRels = newNamedRels}
     where relFilterFunc r = hasRelationship r gb
           nodeFilterFunc n = hasNode n gb
+          newNodeNames = nodeNames ga `M.intersection` nodeNames gb
+          newNamedNodes = namedNodes ga `M.intersection` namedNodes gb
+          newRelNames = relNames ga `M.intersection` relNames gb
+          newNamedRels = namedRels ga `M.intersection` namedRels gb
 
 -- | Feed a cypher result (from the old API) into a graph (looks for nodes and relationships and inserts them)
 addCypher :: C.Response -> Graph -> Graph

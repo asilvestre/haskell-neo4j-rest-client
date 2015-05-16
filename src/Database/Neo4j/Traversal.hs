@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleInstances  #-}
 
 module Database.Neo4j.Traversal (
-    Uniqueness(..), TraversalOrder(..), ReturnFilter(..), RelFilter, TraversalDesc(..), TraversalPaging (..),
+    Uniqueness(..), TraversalOrder(..), ReturnFilter(..), RelFilter, TraversalDesc(..), TraversalPaging(..),
     ConcreteDirection(..), Path(..), IdPath, FullPath, PagedTraversal,
     pathNodes, pathRels,
     traverseGetNodes, traverseGetRels, traverseGetPath, traverseGetFullPath,
@@ -60,7 +60,7 @@ traversalReqBody (TraversalDesc ord relfilt uniq depth nodefilt) = J.encode $ J.
     where depthField (Left lvl) = "max_depth" .= lvl
           depthField (Right desc) = "prune_evaluator" .= J.object ["language" .= ("javascript" :: T.Text),
                                                                    "body" .= desc]
-          returnField (Left filt) = J.object ["language" .= ("builtin" :: T.Text), "body" .= filt]
+          returnField (Left filt) = J.object ["language" .= ("builtin" :: T.Text), "name" .= filt]
           returnField (Right desc) = J.object ["language" .= ("javascript" :: T.Text), "body" .= desc]
 
 -- | How to codify traversalDesc values into JSON
@@ -110,20 +110,20 @@ instance J.FromJSON ConcreteDirection where
     parseJSON _ = mzero
 
 -- | Data type to describe a path in a graph, that is a single node or nodes interleaved with relationships
-data Path a b = PathLink !a !b ConcreteDirection !(Path a b) | PathEnd !a deriving (Eq, Ord, Show)
+data Path a b = PathEnd !a | PathLink !a !b !(Path a b) deriving (Eq, Ord, Show)
 
 -- | Get all the nodes of a path
 pathNodes :: Path a b -> [a]
 pathNodes (PathEnd n) = [n]
-pathNodes (PathLink n _ _ p) = n : pathNodes p
+pathNodes (PathLink n _ p) = n : pathNodes p
 
 -- | Get all the relationships of a path
-pathRels :: Path a b -> [(b, ConcreteDirection)]
+pathRels :: Path a b -> [b]
 pathRels (PathEnd _) = []
-pathRels (PathLink _ r d p) = (r, d) : pathRels p
+pathRels (PathLink _ r p) = r : pathRels p
 
 -- | Path that its data are id's
-type IdPath = Path NodePath RelPath
+type IdPath = Path NodePath (RelPath, ConcreteDirection)
 
 -- | How to decodify an IdPath from JSON
 instance J.FromJSON IdPath where
@@ -131,12 +131,12 @@ instance J.FromJSON IdPath where
                   nodes <- (map (getNodePath . NodeUrl)) <$> (v .: "nodes")
                   rels <- (map (getRelPath . RelUrl)) <$> (v .: "relationships")
                   dirs <- v .: "directions"
-                  let correctPath = (length nodes) == (length rels - 1) && (length rels == length dirs) 
+                  let correctPath = (length nodes) == (length rels + 1) && (length rels == length dirs) 
                   if correctPath
                     then return $ buildPath nodes rels dirs
                     else fail $ "Wrong path nodes: " <> show nodes <> " rels: " <> show rels <> " dirs: " <> show dirs
         where buildPath [n] [] [] = PathEnd n
-              buildPath (n:ns) (r:rs) (d:ds) = PathLink n r d (buildPath ns rs ds)
+              buildPath (n:ns) (r:rs) (d:ds) = PathLink n (r, d) (buildPath ns rs ds)
               buildPath _ _ _ = undefined
     parseJSON _ = fail "wrong type for path"
 
@@ -148,14 +148,13 @@ instance J.FromJSON FullPath where
     parseJSON (J.Object v) =  do
                   nodes <- v .: "nodes"
                   rels <- v .: "relationships"
-                  dirs <- v .: "directions"
-                  let correctPath = (length nodes) == (length rels - 1) && (length rels == length dirs) 
+                  let correctPath = length nodes == length rels + 1
                   if correctPath
-                    then return $ buildPath nodes rels dirs
-                    else fail $ "Wrong path nodes: " <> show nodes <> " rels: " <> show rels <> " dirs: " <> show dirs
-        where buildPath [n] [] [] = PathEnd n
-              buildPath (n:ns) (r:rs) (d:ds) = PathLink n r d (buildPath ns rs ds)
-              buildPath _ _ _ = undefined
+                    then return $ buildPath nodes rels
+                    else fail $ "Wrong path nodes: " <> show nodes <> " rels: " <> show rels
+        where buildPath [n] [] = PathEnd n
+              buildPath (n:ns) (r:rs) = PathLink n r (buildPath ns rs)
+              buildPath _ _ = undefined
     parseJSON _ = fail "wrong type for path"
 
 -- | Data type that holds a result for a paged traversal with the URI to get the rest of the pages
@@ -207,7 +206,7 @@ pagedTraversalDone _ = False
 -- | Generate the query string associated to a paging description
 pagingQs :: TraversalPaging -> S.ByteString
 pagingQs (TraversalPaging pSize leaseSecs) = "?pageSize=" <> showBs pSize <> "&leaseTime=" <> showBs leaseSecs
-    where showBs = fromString .show
+    where showBs = fromString . show
 
 -- | Perform a paged traversal and get the resulting nodes
 pagedTraversal :: (NodeIdentifier a, J.FromJSON b) => S.ByteString -> TraversalDesc -> TraversalPaging -> a
