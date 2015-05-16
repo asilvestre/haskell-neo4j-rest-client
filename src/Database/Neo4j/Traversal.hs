@@ -25,6 +25,7 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Network.HTTP.Types as HT
+import qualified Network.URI as NU
 
 import Database.Neo4j.Types
 import Database.Neo4j.Http
@@ -164,6 +165,10 @@ data PagedTraversal a = Done | More S.ByteString [a] deriving (Eq, Ord, Show)
 traversalApi :: NodeIdentifier a => a -> S.ByteString
 traversalApi n = TE.encodeUtf8 $ (runNodePath $ getNodePath n) <> "/traverse"
 
+-- | Get the path for a paged traversal starting from a node
+pagedApi :: NodeIdentifier a => a -> S.ByteString
+pagedApi n = TE.encodeUtf8 $ (runNodePath $ getNodePath n) <> "/paged/traverse"
+
 -- | Perform a traversal operation
 traverse :: (NodeIdentifier a, J.FromJSON b) => S.ByteString -> TraversalDesc -> a -> Neo4j [b]
 traverse path desc start = Neo4j $ \conn -> httpCreate conn (traversalApi start <> path) (traversalReqBody desc)
@@ -212,8 +217,10 @@ pagingQs (TraversalPaging pSize leaseSecs) = "?pageSize=" <> showBs pSize <> "&l
 pagedTraversal :: (NodeIdentifier a, J.FromJSON b) => S.ByteString -> TraversalDesc -> TraversalPaging -> a
                -> Neo4j (PagedTraversal b)
 pagedTraversal path desc paging start = Neo4j $ \conn -> do
-    (r, headers) <- httpCreateWithHeaders conn (traversalApi start <> path <> pagingQs paging) (traversalReqBody desc)
-    let location = fromMaybe "" (snd <$> find ((==HT.hLocation) . fst) headers)
+    (r, headers) <- httpCreateWithHeaders conn (pagedApi start <> path <> pagingQs paging) (traversalReqBody desc)
+    let location = fromMaybe "" $ do
+        loc <- (S.unpack . snd) <$> find ((==HT.hLocation) . fst) headers
+        (S.pack . NU.uriPath) <$> NU.parseURI loc
     return (More location r)
 
 -- | Perform a paged traversal and get the resulting nodes
