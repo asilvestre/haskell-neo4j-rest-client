@@ -1487,8 +1487,9 @@ case_cypherErrorInTransaction = withConnection host port $ do
                                 M.fromList [("age", TC.newparam (78 :: Int64)),
                                             ("props", TC.ParamProperties $ M.fromList["age" |: (99 :: Int64)])]
         neo4jBool $ not $ TC.isSuccess res
-        neo4jEqual (Left ("Neo.ClientError.Statement.InvalidSyntax",
-                            "Invalid input 'i': expected <init> (line 1, column 1)\n\"i\"\n ^")) res
+        neo4jEqual (Left ("Neo.ClientError.Statement.InvalidSyntax", "")) (procRes res)
+    where procRes r@(Right _) = r
+          procRes r@(Left (err, _))= Left (err, "")
 
 -- | Test a cypher rollback transaction
 case_cypherTransactionRollback :: Assertion
