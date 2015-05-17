@@ -14,7 +14,7 @@ description:
     .
        -Traversal API
     .
-    All code has been tested with Neo4j versions 2.0.3,  2.1.5, 2.1.7 and 2.2.0
+    All code has been tested with Neo4j versions 2.0.3, 2.1.5, 2.1.7, 2.2.0 and 2.2.1
     .
     2.2.0 added authentication to the API this driver uses, this is not supported yet by this driver but it will be soon.
     In the meantime you will have to disable it.

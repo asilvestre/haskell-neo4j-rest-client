@@ -2,19 +2,30 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE FlexibleInstances  #-}
 
+-- | Module to manage traversal operations
+
 module Database.Neo4j.Traversal (
-    Uniqueness(..), TraversalOrder(..), ReturnFilter(..), RelFilter, TraversalDesc(..), TraversalPaging(..),
-    ConcreteDirection(..), Path(..), IdPath, FullPath, PagedTraversal,
-    pathNodes, pathRels,
+    -- * Types for configuring the traversal
+    Uniqueness(..), TraversalOrder(..), ReturnFilter(..), RelFilter, TraversalDesc(..),
+    -- * Additional types for configuring a paged traversal
+    TraversalPaging(..),
+    -- * Types used when returning paths
+    ConcreteDirection(..), Path(..), IdPath, FullPath,
+    -- * Types used when returning paged results
+    PagedTraversal, pathNodes, pathRels, 
+    -- * Traversal operations
     traverseGetNodes, traverseGetRels, traverseGetPath, traverseGetFullPath,
-    getPagedValues, nextTraversalPage, pagedTraversalDone,
-    pagedTraverseGetNodes, pagedTraverseGetRels, pagedTraverseGetPath, pagedTraverseGetFullPath) where
+    -- * Paged traversal operations
+    pagedTraverseGetNodes, pagedTraverseGetRels, pagedTraverseGetPath, pagedTraverseGetFullPath,
+    -- * Operations to handle paged results
+    getPagedValues, nextTraversalPage, pagedTraversalDone) where
 
 import Data.Default
 
 import Control.Applicative
+import Control.Exception.Base (throw, catch)
 import Control.Monad (mzero)
-import Data.Aeson ((.=), (.:))
+import Data.Aeson ((.=), (.:), (.:?))
 import Data.List (find)
 import Data.Maybe (fromMaybe)
 import Data.String (fromString)
@@ -131,7 +142,8 @@ instance J.FromJSON IdPath where
     parseJSON (J.Object v) =  do
                   nodes <- (map (getNodePath . NodeUrl)) <$> (v .: "nodes")
                   rels <- (map (getRelPath . RelUrl)) <$> (v .: "relationships")
-                  dirs <- v .: "directions"
+                  -- Pre 2.2 neo4j versions don't provide the directions field, so we put a default value...
+                  dirs <- fromMaybe (take (length rels) $ repeat Out) <$> v .:? "directions"
                   let correctPath = (length nodes) == (length rels + 1) && (length rels == length dirs) 
                   if correctPath
                     then return $ buildPath nodes rels dirs
@@ -161,17 +173,29 @@ instance J.FromJSON FullPath where
 -- | Data type that holds a result for a paged traversal with the URI to get the rest of the pages
 data PagedTraversal a = Done | More S.ByteString [a] deriving (Eq, Ord, Show)
 
+-- | Get the path of a node in simple text
+bsNodePath :: NodeIdentifier a => a -> S.ByteString
+bsNodePath n = TE.encodeUtf8 $ (runNodePath $ getNodePath n)
+
 -- | Get the path for a traversal starting from a node
 traversalApi :: NodeIdentifier a => a -> S.ByteString
-traversalApi n = TE.encodeUtf8 $ (runNodePath $ getNodePath n) <> "/traverse"
+traversalApi n = bsNodePath n <> "/traverse"
 
 -- | Get the path for a paged traversal starting from a node
 pagedApi :: NodeIdentifier a => a -> S.ByteString
-pagedApi n = TE.encodeUtf8 $ (runNodePath $ getNodePath n) <> "/paged/traverse"
+pagedApi n = bsNodePath n <> "/paged/traverse"
+
+-- | Wrap 404 exception into Neo4jNoEntity exceptions
+proc404 :: NodeIdentifier n => n -> Neo4jException -> a
+proc404 n exc@(Neo4jUnexpectedResponseException s)
+        | s == HT.status404 = throw (Neo4jNoEntityException $ bsNodePath n)
+        | otherwise = throw exc
+proc404 _ exc = throw exc
 
 -- | Perform a traversal operation
 traverse :: (NodeIdentifier a, J.FromJSON b) => S.ByteString -> TraversalDesc -> a -> Neo4j [b]
-traverse path desc start = Neo4j $ \conn -> httpCreate conn (traversalApi start <> path) (traversalReqBody desc)
+traverse path desc start = Neo4j $ \conn ->
+                             httpCreate conn (traversalApi start <> path) (traversalReqBody desc) `catch` proc404 start
 
 -- | Perform a traversal and get the resulting nodes
 traverseGetNodes :: NodeIdentifier a => TraversalDesc -> a -> Neo4j [Node]
@@ -182,6 +206,8 @@ traverseGetRels :: NodeIdentifier a => TraversalDesc -> a -> Neo4j [Relationship
 traverseGetRels = traverse "/relationship"
 
 -- | Perform a traversal and get the resulting node and relationship paths
+--   IMPORTANT! In pre 2.2 Neo4j versions the directions in each relationship ID returned have a default value
+--   (The API does not provide them)
 traverseGetPath :: NodeIdentifier a => TraversalDesc -> a -> Neo4j [IdPath]
 traverseGetPath = traverse "/path"
 
@@ -217,7 +243,8 @@ pagingQs (TraversalPaging pSize leaseSecs) = "?pageSize=" <> showBs pSize <> "&l
 pagedTraversal :: (NodeIdentifier a, J.FromJSON b) => S.ByteString -> TraversalDesc -> TraversalPaging -> a
                -> Neo4j (PagedTraversal b)
 pagedTraversal path desc paging start = Neo4j $ \conn -> do
-    (r, headers) <- httpCreateWithHeaders conn (pagedApi start <> path <> pagingQs paging) (traversalReqBody desc)
+    (r, headers) <- httpCreateWithHeaders conn (pagedApi start <> path <> pagingQs paging) (
+        traversalReqBody desc) `catch` proc404 start
     let location = fromMaybe "" $ do
         loc <- (S.unpack . snd) <$> find ((==HT.hLocation) . fst) headers
         (S.pack . NU.uriPath) <$> NU.parseURI loc
@@ -231,7 +258,9 @@ pagedTraverseGetNodes = pagedTraversal "/node"
 pagedTraverseGetRels :: NodeIdentifier a => TraversalDesc -> TraversalPaging -> a -> Neo4j(PagedTraversal Relationship)
 pagedTraverseGetRels = pagedTraversal "/relationship"
 
--- | Perform a paged traversal and get the resulting id paths 
+-- | Perform a paged traversal and get the resulting id paths,
+--   IMPORTANT! In pre 2.2 Neo4j versions the directions in each relationship ID returned have a default value
+--   (The API does not provide them)
 pagedTraverseGetPath :: NodeIdentifier a => TraversalDesc -> TraversalPaging -> a -> Neo4j (PagedTraversal IdPath)
 pagedTraverseGetPath = pagedTraversal "/path"
 

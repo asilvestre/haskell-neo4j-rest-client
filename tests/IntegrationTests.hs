@@ -19,6 +19,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Vector as V
 import qualified Data.List as L
+import qualified Network.HTTP.Types as HT
 
 import Control.Exception (handle)
 import Test.Framework.TH (defaultMainGenerator)
@@ -1606,12 +1607,15 @@ setUpTraversalTest = B.runBatch $ do
                             peter <- _createNode "Peter"
                             tobias <- _createNode "Tobias"
                             sara <- _createNode "Sara"
+                            gumersindo <- _createNode "Gumersindo"
                             _createRel "Root-Johan" "knows" root johan
                             _createRel "Root-Mattias" "knows" root mattias 
                             _createRel "Johan-Emil" "knows" johan emil 
                             _createRel "Emil-Peter" "knows" emil peter
                             _createRel "Emil-Tobias" "knows" emil tobias
                             _createRel "Tobias-Sara" "loves" tobias sara
+                            _createRel "Gumersindo-Tobias" "hates" gumersindo tobias
+                            _createRel "Gumersindo-Sara" "admires" sara gumersindo
     where _createNode name = B.createNamedNode name $ M.fromList ["name" |: (fromString name :: T.Text)]
           _createRel name t from to = void $ B.createNamedRelationship name t M.empty from to
 
@@ -1620,6 +1624,20 @@ cleanUpTraversalTest :: G.Graph -> Neo4j ()
 cleanUpTraversalTest g = void $ B.runBatch $ do
                             mapM_ B.deleteRelationship (G.getRelationships g)
                             mapM_ B.deleteNode (G.getNodes g)
+
+
+-- | Test a traversal with an unexisting start
+case_traversalNotFound :: Assertion
+case_traversalNotFound = do
+        g <- withConnection host port $ setUpTraversalTest
+        let start = fromJust $ G.getNamedNode "Root" g
+        let expException = Neo4jNoEntityException $ (TE.encodeUtf8 . runNodePath . nodePath) start
+        assertException expException $ withConnection host port $ do
+            let rels = map (\n -> fromJust $ G.getNamedRelationship n g) ["Root-Johan", "Root-Mattias"]
+            mapM_ deleteRelationship rels
+            deleteNode start
+            void $ T.traverseGetNodes def start
+        withConnection host port $ cleanUpTraversalTest g
 
 -- | Test a default traversal returning nodes
 case_defaultTraversalNodes :: Assertion
@@ -1672,12 +1690,25 @@ case_defaultTraversalFullPath = withConnection host port $ do
     let _getNode = \name -> fromJust $ G.getNamedNode name g
     let _getRel = \name -> fromJust $ G.getNamedRelationship name g
     let checkPath = \p nodes rels -> do
-        neo4jEqual (map _getNode nodes) (T.pathNodes p)
-        neo4jEqual (map _getRel rels) (T.pathRels p)
+        neo4jEqual (L.sort $ map _getNode nodes) (L.sort $ T.pathNodes p)
+        neo4jEqual (L.sort $ map _getRel rels) (L.sort $ T.pathRels p)
     checkPath (ps !! 0) ["Root"] []
     checkPath (ps !! 1) ["Root", "Johan"] ["Root-Johan"]
     checkPath (ps !! 2) ["Root", "Mattias"] ["Root-Mattias"]
     cleanUpTraversalTest g
+
+-- | Test a traversal with an unexisting start
+case_pagedTraversalNotFound :: Assertion
+case_pagedTraversalNotFound = do
+        g <- withConnection host port $ setUpTraversalTest
+        let start = fromJust $ G.getNamedNode "Root" g
+        let expException = Neo4jNoEntityException $ (TE.encodeUtf8 . runNodePath . nodePath) start
+        assertException expException $ withConnection host port $ do
+            let rels = map (\n -> fromJust $ G.getNamedRelationship n g) ["Root-Johan", "Root-Mattias"]
+            mapM_ deleteRelationship rels
+            deleteNode start
+            void $ T.pagedTraverseGetNodes def def start
+        withConnection host port $ cleanUpTraversalTest g
 
 -- | Test a paged traversal returning nodes
 case_pagedTraversalNodes :: Assertion
@@ -1762,8 +1793,8 @@ case_pagedTraversalFullPaths = withConnection host port $ do
     let _getNode = \name -> fromJust $ G.getNamedNode name g
     let _getRel = \name -> fromJust $ G.getNamedRelationship name g
     let checkPath = \p nodes rels -> do
-        neo4jEqual (map _getNode nodes) (T.pathNodes p)
-        neo4jEqual (map _getRel rels) (T.pathRels p)
+        neo4jEqual (L.sort $ map _getNode nodes) (L.sort $ T.pathNodes p)
+        neo4jEqual (L.sort $ map _getRel rels) (L.sort $ T.pathRels p)
     pg <- T.pagedTraverseGetFullPath desc paging start
     neo4jEqual False (T.pagedTraversalDone pg)
     checkPath (T.getPagedValues pg !! 0) ["Root"] []
@@ -1777,3 +1808,123 @@ case_pagedTraversalFullPaths = withConnection host port $ do
     pg4 <- T.nextTraversalPage pg3
     neo4jEqual True (T.pagedTraversalDone pg4)
     cleanUpTraversalTest g
+
+-- | Test traversal depth first search
+case_dfsTraversalNodes :: Assertion
+case_dfsTraversalNodes = withConnection host port $ do
+    g <- setUpTraversalTest
+    let start = fromJust $ G.getNamedNode "Root" g
+    let desc = def {T.travDepth = Left 2, T.travOrder = T.DepthFirst}
+    ns <- T.traverseGetNodes desc start
+    let expected = map (\n -> fromJust $ G.getNamedNode n g) ["Root", "Johan", "Emil", "Mattias"]
+    neo4jEqual (L.sort expected) (L.sort ns)
+    cleanUpTraversalTest g
+
+-- | Test traversal with a relation filter
+case_relFilterTraversalNodes :: Assertion
+case_relFilterTraversalNodes = withConnection host port $ do
+    g <- setUpTraversalTest
+    let start = fromJust $ G.getNamedNode "Tobias" g
+    let desc = def {T.travRelFilter = [("loves", Outgoing)]}
+    ns <- T.traverseGetNodes desc start
+    let expected = map (\n -> fromJust $ G.getNamedNode n g) ["Tobias", "Sara"]
+    neo4jEqual (L.sort expected) (L.sort ns)
+    let desc2 = def {T.travRelFilter = [("hates", Incoming)]}
+    ns2 <- T.traverseGetNodes desc2 start
+    let expected2 = map (\n -> fromJust $ G.getNamedNode n g) ["Tobias", "Gumersindo"]
+    neo4jEqual (L.sort expected2) (L.sort ns2)
+    let desc3 = def {T.travRelFilter = [("hates", Any)]}
+    ns3 <- T.traverseGetNodes desc3 start
+    let expected3 = map (\n -> fromJust $ G.getNamedNode n g) ["Tobias", "Gumersindo"]
+    neo4jEqual (L.sort expected3) (L.sort ns3)
+    let desc4 = def {T.travRelFilter = [("hates", Incoming), ("loves", Outgoing)]}
+    ns4 <- T.traverseGetNodes desc4 start
+    let expected4 = map (\n -> fromJust $ G.getNamedNode n g) ["Tobias", "Sara", "Gumersindo"]
+    neo4jEqual (L.sort expected4) (L.sort ns4)
+    let desc5 = def {T.travRelFilter = [("htes", Incoming)]}
+    ns5 <- T.traverseGetNodes desc5 start
+    let expected5 = map (\n -> fromJust $ G.getNamedNode n g) ["Tobias"]
+    neo4jEqual (L.sort expected5) (L.sort ns5)
+    cleanUpTraversalTest g
+
+-- | Test traversal with a uniqueness constraint
+case_uniquenessTraversalNodes :: Assertion
+case_uniquenessTraversalNodes = withConnection host port $ do
+    g <- setUpTraversalTest
+    let start = fromJust $ G.getNamedNode "Tobias" g
+    let desc = def {T.travDepth = Left 2, T.travRelFilter = [("loves", Any), ("hates", Any), ("admires", Any)]}
+    ns <- T.traverseGetNodes desc start
+    let expected = map (\n -> fromJust $ G.getNamedNode n g) ["Tobias", "Sara", "Gumersindo", "Sara", "Gumersindo"]
+    neo4jEqual (L.sort expected) (L.sort ns)
+    let desc2 = desc {T.travUniqueness = Just T.NodeGlobal}
+    ns2 <- T.traverseGetNodes desc2 start
+    let expected2 = map (\n -> fromJust $ G.getNamedNode n g) ["Tobias", "Sara", "Gumersindo"]
+    neo4jEqual (L.sort expected2) (L.sort ns2)
+    let desc3 = desc {T.travUniqueness = Just T.RelationshipGlobal}
+    ns3 <- T.traverseGetNodes desc3 start
+    let expected3 = map (\n -> fromJust $ G.getNamedNode n g) ["Tobias", "Gumersindo", "Sara", "Gumersindo"]
+    neo4jEqual (L.sort expected3) (L.sort ns3)
+    let desc4 = desc {T.travUniqueness = Just T.NodePathUnique}
+    ns4 <- T.traverseGetNodes desc4 start
+    let expected4 = map (\n -> fromJust $ G.getNamedNode n g) ["Tobias", "Sara", "Gumersindo", "Sara", "Gumersindo"]
+    neo4jEqual (L.sort expected4) (L.sort ns4)
+    let desc5 = desc {T.travUniqueness = Just T.RelationshipPath}
+    ns5 <- T.traverseGetNodes desc5 start
+    let expected5 = map (\n -> fromJust $ G.getNamedNode n g) ["Tobias", "Sara", "Gumersindo", "Sara", "Gumersindo"]
+    neo4jEqual (L.sort expected5) (L.sort ns5)
+    cleanUpTraversalTest g
+
+-- | Test traversal with a javascript depth expression
+case_progDepthTraversalNodes :: Assertion
+case_progDepthTraversalNodes = withConnection host port $ do
+    g <- setUpTraversalTest
+    let start = fromJust $ G.getNamedNode "Root" g
+    let desc = def {T.travDepth = Right "position.length() >= 2;"}
+    ns <- T.traverseGetNodes desc start
+    let expected = map (\n -> fromJust $ G.getNamedNode n g) ["Root", "Johan", "Mattias", "Emil"]
+    neo4jEqual (L.sort expected) (L.sort ns)
+    cleanUpTraversalTest g
+
+-- | Test traversal with a wrong javascript depth expression
+case_wrongProgDepthTraversalNodes :: Assertion
+case_wrongProgDepthTraversalNodes = do
+        g <- withConnection host port $ setUpTraversalTest
+        assertException expException $ withConnection host port $ do
+            let start = fromJust $ G.getNamedNode "Root" g
+            let desc = def {T.travDepth = Right "positionlength() >= 2;"}
+            void $ T.traverseGetNodes desc start
+        withConnection host port $ cleanUpTraversalTest g
+      where expException = Neo4jUnexpectedResponseException HT.status400
+
+-- | Test traversal without initial node
+case_returnButFirstTraversal :: Assertion
+case_returnButFirstTraversal = withConnection host port $ do
+    g <- setUpTraversalTest
+    let start = fromJust $ G.getNamedNode "Root" g
+    let desc = def {T.travNodeFilter = Left T.ReturnAllButStartNode}
+    ns <- T.traverseGetNodes desc start
+    let expected = map (\n -> fromJust $ G.getNamedNode n g) ["Johan", "Mattias"]
+    neo4jEqual (L.sort expected) (L.sort ns)
+    cleanUpTraversalTest g
+
+-- | Test filter nodes without initial node
+case_filterNodesTraversal :: Assertion
+case_filterNodesTraversal = withConnection host port $ do
+    g <- setUpTraversalTest
+    let start = fromJust $ G.getNamedNode "Root" g
+    let desc = def {T.travNodeFilter = Right "position.endNode().getProperty('name').toLowerCase().contains('t');"}
+    ns <- T.traverseGetNodes desc start
+    let expected = map (\n -> fromJust $ G.getNamedNode n g) ["Root", "Mattias"]
+    neo4jEqual (L.sort expected) (L.sort ns)
+    cleanUpTraversalTest g
+
+-- | Test traversal with a filter expression
+case_wrongFilterNodesTraversal :: Assertion
+case_wrongFilterNodesTraversal = do
+        g <- withConnection host port $ setUpTraversalTest
+        assertException expException $ withConnection host port $ do
+            let start = fromJust $ G.getNamedNode "Root" g
+            let desc = def {T.travNodeFilter = Right "posiiiitionlength() >= 2;"}
+            void $ T.traverseGetNodes desc start
+        withConnection host port $ cleanUpTraversalTest g
+      where expException = Neo4jUnexpectedResponseException HT.status400
