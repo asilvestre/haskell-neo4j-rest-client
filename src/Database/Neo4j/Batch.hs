@@ -8,9 +8,10 @@ module Database.Neo4j.Batch (
     -- * General
     Batch, runBatch, BatchFuture(..), NodeBatchIdentifier, RelBatchIdentifier, BatchEntity,
     -- * Nodes
-    createNode, getNode, deleteNode,
+    createNode, createNamedNode, getNode, getNamedNode, deleteNode,
     -- * Relationships
-    createRelationship, getRelationship, getRelationshipFrom, getRelationshipTo, deleteRelationship, getRelationships,
+    createRelationship, createNamedRelationship, getRelationship, getNamedRelationship, getRelationshipFrom,
+    getRelationshipTo, deleteRelationship, getRelationships,
     -- * Properties
     setProperties, setProperty, deleteProperties, deleteProperty,
     -- * Labels

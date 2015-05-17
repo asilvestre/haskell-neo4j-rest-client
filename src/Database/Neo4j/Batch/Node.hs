@@ -35,11 +35,23 @@ createNode props = nextState cmd
     where cmd = defCmd{cmdMethod = HT.methodPost, cmdPath = "/node", cmdBody = J.toJSON props, cmdParse = parser}
           parser n = G.addNode (tryParseBody n)
 
+-- | Batch operation to create a node and assign it a name to easily retrieve it from the resulting graph of the batch
+createNamedNode :: String -> Properties -> Batch (BatchFuture Node)
+createNamedNode name props = nextState cmd
+    where cmd = defCmd{cmdMethod = HT.methodPost, cmdPath = "/node", cmdBody = J.toJSON props, cmdParse = parser}
+          parser n = G.addNamedNode name (tryParseBody n)
+
 -- | Batch operation to get a node from the DB
 getNode :: NodeBatchIdentifier a => a -> Batch (BatchFuture Node)
 getNode n = nextState cmd
     where cmd = defCmd{cmdMethod = HT.methodGet, cmdPath = getNodeBatchId n, cmdBody = "", cmdParse = parser}
           parser jn = G.addNode (tryParseBody jn)
+
+-- | Batch operation to get a node from the DB and assign it a name
+getNamedNode :: NodeBatchIdentifier a => String -> a -> Batch (BatchFuture Node)
+getNamedNode name n = nextState cmd
+    where cmd = defCmd{cmdMethod = HT.methodGet, cmdPath = getNodeBatchId n, cmdBody = "", cmdParse = parser}
+          parser jn = G.addNamedNode name (tryParseBody jn)
 
 -- | Batch operation to delete a node
 deleteNode :: NodeBatchIdentifier a => a -> Batch (BatchFuture ())

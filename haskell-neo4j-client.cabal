@@ -1,5 +1,5 @@
 name:                haskell-neo4j-client
-version:             0.3.0.15
+version:             0.3.1.0
 synopsis:            A Haskell neo4j client
 description:         
     Library to interact with Neo4j databases. 
@@ -12,8 +12,9 @@ description:
     .
        -Batch calls for CRUD operations.
     .
+       -Traversal API
     .
-    All code has been tested with Neo4j versions 2.0.3,  2.1.5, 2.1.7 and 2.2.0
+    All code has been tested with Neo4j versions 2.0.3, 2.1.5, 2.1.7, 2.2.0 and 2.2.1
     .
     2.2.0 added authentication to the API this driver uses, this is not supported yet by this driver but it will be soon.
     In the meantime you will have to disable it.
@@ -61,6 +62,7 @@ Test-Suite test-haskell-neo4j-rest-client
                    , lifted-base                 == 0.2.*
                    , hashable                    == 1.2.*
                    , mtl                         >= 2.1        && < 2.3
+                   , network-uri                 == 2.6.*
 
 library
   hs-source-dirs:      src
@@ -89,3 +91,4 @@ library
                      , hashable              == 1.2.*
                      , transformers-base     == 0.4.*
                      , mtl                   >= 2.1        && < 2.3
+                     , network-uri           == 2.6.*

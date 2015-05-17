@@ -137,6 +137,8 @@ instance Hashable NodeUrl
 
 -- | Representation of a Neo4j node, has a location URI and a set of properties
 data Node = Node {nodePath :: NodePath, nodeProperties :: Properties} deriving (Show, Eq)
+instance Ord Node where
+    a <= b = nodePath a <= nodePath b
 
 -- | Get the properties of a node
 getNodeProperties :: Node -> Properties
@@ -160,7 +162,7 @@ nodeAPI = "/db/data/node"
 nodeAPITxt :: T.Text
 nodeAPITxt = "/db/data/node"
 
-newtype NodePath = NodePath {runNodePath :: T.Text} deriving (Show, Eq, Generic)
+newtype NodePath = NodePath {runNodePath :: T.Text} deriving (Show, Ord, Eq, Generic)
 instance Hashable NodePath
 
 class NodeIdentifier a where
@@ -188,7 +190,7 @@ runNodeIdentifier = TE.encodeUtf8 . runNodePath . getNodePath
 type RelationshipType = T.Text
 
 -- | Relationship direction
-data Direction = Outgoing | Incoming | Any
+data Direction = Outgoing | Incoming | Any deriving (Eq, Show)
 
 -- | Type for a relationship location
 newtype RelUrl = RelUrl {runRelUrl :: T.Text} deriving (Show, Eq, Generic)
@@ -200,6 +202,8 @@ data Relationship = Relationship {relPath :: RelPath,
                                   relProperties :: Properties,
                                   relFrom :: NodePath,
                                   relTo :: NodePath} deriving (Show, Eq)
+instance Ord Relationship where
+    a <= b = relPath a <= relPath b
 
 -- | Get the properties of a relationship
 getRelProperties :: Relationship -> Properties
@@ -240,7 +244,7 @@ relationshipAPI = "/db/data/relationship"
 relationshipAPITxt :: T.Text
 relationshipAPITxt = "/db/data/relationship"
 
-newtype RelPath = RelPath {runRelPath :: T.Text} deriving (Show, Eq, Generic)
+newtype RelPath = RelPath {runRelPath :: T.Text} deriving (Show, Eq, Ord, Generic)
 instance Hashable RelPath
 
 class RelIdentifier a where
