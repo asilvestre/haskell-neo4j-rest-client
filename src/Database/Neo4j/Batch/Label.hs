@@ -38,7 +38,7 @@ getNodesByLabelAndProperty lbl prop = nextState cmd
           propUrl Nothing = ""
           propUrl (Just (name, value)) = '?' : urlEncodeVars [(T.unpack name, lbsToStr $ J.encode value)]
           lbsToStr = S.unpack . L.toStrict
-          parser jn g = foldl (\gacc n -> G.addNodeLabel n lbl (G.addNode n gacc)) g (tryParseBody jn)
+          parser jn g = foldl (\gacc n -> G.addNodeLabel n lbl (G.addNode n gacc)) g (tryParseBody jn :: [Node])
 
 -- | Add labels to a node
 -- | Raises Neo4jNoEntityException if the node doesn't exist
@@ -46,7 +46,7 @@ addLabels :: NodeBatchIdentifier a => [Label] -> a -> Batch (BatchFuture ())
 addLabels lbls n = nextState cmd
     where cmd = defCmd{cmdMethod = HT.methodPost, cmdPath = path, cmdBody = J.toJSON lbls, cmdParse = parser}
           path = getNodeBatchId n <> "/labels"
-          parser jn g = let from = parseLabelsPath jn "/labels" in foldl (flip (G.addNodeLabel from)) g lbls
+          parser jn g = let from = parseLabelsPath jn "/labels" in foldl (flip (G.addNodeLabel from)) g (lbls :: [Label])
 
 -- | Change node labels
 -- | Raises Neo4jNoEntityException if the node doesn't exist

@@ -340,7 +340,7 @@ instance Applicative Neo4j where
     (<*>) = ap
 
 instance MonadIO Neo4j where
-	liftIO f = Neo4j $ const (liftIO f)
+    liftIO f = Neo4j $ const (liftIO f)
 
 instance MonadThrow Neo4j where
     throwM e = Neo4j $ const (throw e)

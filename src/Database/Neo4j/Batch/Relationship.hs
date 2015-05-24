@@ -80,7 +80,7 @@ getRelationships :: NodeBatchIdentifier n => n -> Direction -> [RelationshipType
 getRelationships n dir types = nextState cmd
     where cmd = defCmd{cmdMethod = HT.methodGet, cmdPath = path, cmdBody = "", cmdParse = parser}
           path = getNodeBatchId n <> "/relationships/" <> dirStr dir <> filterStr types
-          parser jr g = foldl (flip G.addRelationship) g (tryParseBody jr)
+          parser jr g = foldl (flip G.addRelationship) g (tryParseBody jr :: [Relationship])
           dirStr Outgoing = "out"
           dirStr Incoming = "in"
           dirStr Any = "all"
