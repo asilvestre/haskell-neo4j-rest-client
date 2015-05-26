@@ -1,0 +1,6 @@
+language: haskell
+services:
+      - neo4j
+ghc:
+      - 7.10
+      - 7.8
