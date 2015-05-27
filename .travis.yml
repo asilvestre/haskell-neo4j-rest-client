@@ -1,7 +1,7 @@
 language: haskell
 ghc:
-      - 7.10
-      - 7.8
+      - '7.10'
+      - '7.8'
 
 jdk:
     - oraclejdk7  # needed for local Neo4j 2.0+
