@@ -22,6 +22,8 @@ module Database.Neo4j.Traversal (
 
 import Data.Default
 
+import Prelude hiding (traverse)
+
 import Control.Applicative
 import Control.Exception.Base (throw, catch)
 import Control.Monad (mzero)
