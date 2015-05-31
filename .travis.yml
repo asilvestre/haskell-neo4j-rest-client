@@ -1,25 +1,36 @@
-language: haskell
-ghc:
-      - '7.10'
-      - '7.8'
-
-jdk:
-    - oraclejdk7  # needed for local Neo4j 2.0+
-
 env:
-    # test across multiple versions of Neo4j:
-    - NEO4J_VERSION="2.2.1"
-    - NEO4J_VERSION="2.2.0"
-    - NEO4J_VERSION="2.1.7"
-    - NEO4J_VERSION="2.1.5"
-    - NEO4J_VERSION="2.0.3"
+  - CABALVER=1.18 GHCVER='7.8.4' NEO4J_VERSION="2.2.1"
+  - CABALVER=1.18 GHCVER='7.8.4' NEO4J_VERSION="2.1.7"
+  - CABALVER=1.18 GHCVER='7.8.4' NEO4J_VERSION="2.0.3"
+  - CABALVER=1.22 GHCVER='7.10.1' NEO4J_VERSION="2.2.1"
+  - CABALVER=1.22 GHCVER='7.10.1' NEO4J_VERSION="2.1.7"
+  - CABALVER=1.22 GHCVER='7.10.1' NEO4J_VERSION="2.0.3"
 
 before_install:
-    # install Neo4j locally:
-    - wget dist.neo4j.org/neo4j-community-$NEO4J_VERSION-unix.tar.gz
-    - tar -xzf neo4j-community-$NEO4J_VERSION-unix.tar.gz
-    - echo "dbms.security.auth_enabled=false" >> neo4j-community-$NEO4J_VERSION/conf/neo4j-server.properties
-    - neo4j-community-$NEO4J_VERSION/bin/neo4j start
+  - |
+    travis_retry sudo add-apt-repository -y ppa:hvr/ghc
+    travis_retry sudo apt-get update
+    travis_retry sudo apt-get install cabal-install-$CABALVER ghc-$GHCVER
+    export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
+    travis_retry sudo apt-get install happy-1.19.4 alex-3.1.3
+    export PATH=/opt/alex/3.1.3/bin:/opt/happy/1.19.4/bin:$PATH
+  - wget dist.neo4j.org/neo4j-community-${NEO4J_VERSION}-unix.tar.gz
+  - tar -xzf neo4j-community-${NEO4J_VERSION}-unix.tar.gz
+  - echo "dbms.security.auth_enabled=false" >> neo4j-community-${NEO4J_VERSION}/conf/neo4j-server.properties
+  - neo4j-community-${NEO4J_VERSION}/bin/neo4j start
+
+install:
+  - cabal --version
+  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
+  - travis_retry cabal update
+  - cabal install --only-dependencies --enable-tests --enable-benchmarks
+  - cabal configure --enable-tests --enable-benchmarks
+
+script:
+  - cabal build && cabal test
+
+jdk:
+  - oraclejdk7  # needed for local Neo4j 2.0+
 
 # don't CI feature branches, but note that this *does* CI PR merge commits --
 # including before they're made! =)
