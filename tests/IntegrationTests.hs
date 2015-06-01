@@ -1692,6 +1692,11 @@ case_defaultTraversalFullPath = withConnection host port $ do
     let checkPath = \p nodes rels -> do
         neo4jEqual (L.sort $ map _getNode nodes) (L.sort $ T.pathNodes p)
         neo4jEqual (L.sort $ map _getRel rels) (L.sort $ T.pathRels p)
+    liftIO $ print $ compare (ps !! 0) (ps !! 1)
+    liftIO $ print $ compare (ps !! 1) (ps !! 2)
+    liftIO $ print $ compare (ps !! 0) (ps !! 2)
+    liftIO $ print $ compare (ps !! 1) (ps !! 1)
+    liftIO $ print $ compare (ps !! 2) (ps !! 2)
     liftIO $ print ps
     checkPath (ps !! 0) ["Root"] []
     checkPath (ps !! 2) ["Root", "Mattias"] ["Root-Mattias"]
