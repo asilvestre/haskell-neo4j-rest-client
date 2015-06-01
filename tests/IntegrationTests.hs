@@ -32,6 +32,7 @@ import qualified Database.Neo4j.Cypher as C
 import qualified Database.Neo4j.Graph as G
 import qualified Database.Neo4j.Transactional.Cypher as TC
 import qualified Database.Neo4j.Traversal as T
+import Database.Neo4j.Types (Relationship(..))
 
 (<>) :: Monoid a => a -> a -> a
 (<>) = mappend
@@ -1699,7 +1700,17 @@ case_defaultTraversalFullPath = withConnection host port $ do
     liftIO $ print $ compare (ps !! 2) (ps !! 2)
     liftIO $ print $ L.sort $ (T.pathNodes $ ps !! 1) ++ (T.pathNodes $ ps !! 2)
     liftIO $ print $ L.sort $ (T.pathRels $ ps !! 1) ++ (T.pathRels $ ps !! 2)
-    liftIO $ print ps
+    let rels = L.sort $ (T.pathRels $ ps !! 1) ++ (T.pathRels $ ps !! 2)
+    liftIO $ print $ compare (rels !! 0) (rels !! 1)
+    liftIO $ print $ compare (rels !! 1) (rels !! 1)
+    liftIO $ print $ "A " ++ (show $ rels !! 0)
+    liftIO $ print $ "B " ++ (show $ rels !! 1)
+    let (Relationship rpath rtype rprop rfrom rto) = rels !! 0
+    let (Relationship rpathb rtypeb rpropb rfromb rtob) = rels !! 1
+    liftIO $ print $ compare rpath rpathb
+    liftIO $ print $ compare rtype rtypeb
+    liftIO $ print $ compare rfrom rfromb
+    liftIO $ print $ compare rto rtob
     checkPath (ps !! 0) ["Root"] []
     checkPath (ps !! 2) ["Root", "Mattias"] ["Root-Mattias"]
     checkPath (ps !! 1) ["Root", "Johan"] ["Root-Johan"]
