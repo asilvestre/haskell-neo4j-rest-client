@@ -32,7 +32,6 @@ import qualified Database.Neo4j.Cypher as C
 import qualified Database.Neo4j.Graph as G
 import qualified Database.Neo4j.Transactional.Cypher as TC
 import qualified Database.Neo4j.Traversal as T
-import Database.Neo4j.Types (Relationship(..))
 
 (<>) :: Monoid a => a -> a -> a
 (<>) = mappend
