@@ -1697,6 +1697,8 @@ case_defaultTraversalFullPath = withConnection host port $ do
     liftIO $ print $ compare (ps !! 0) (ps !! 2)
     liftIO $ print $ compare (ps !! 1) (ps !! 1)
     liftIO $ print $ compare (ps !! 2) (ps !! 2)
+    liftIO $ print $ L.sort $ (T.pathNodes $ ps !! 1) ++ (T.pathNodes $ ps !! 2)
+    liftIO $ print $ L.sort $ (T.pathRels $ ps !! 1) ++ (T.pathRels $ ps !! 2)
     liftIO $ print ps
     checkPath (ps !! 0) ["Root"] []
     checkPath (ps !! 2) ["Root", "Mattias"] ["Root-Mattias"]
