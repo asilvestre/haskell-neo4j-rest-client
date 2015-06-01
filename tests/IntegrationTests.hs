@@ -1693,27 +1693,15 @@ case_defaultTraversalFullPath = withConnection host port $ do
     let checkPath = \p nodes rels -> do
         neo4jEqual (L.sort $ map _getNode nodes) (L.sort $ T.pathNodes p)
         neo4jEqual (L.sort $ map _getRel rels) (L.sort $ T.pathRels p)
-    liftIO $ print $ compare (ps !! 0) (ps !! 1)
-    liftIO $ print $ compare (ps !! 1) (ps !! 2)
-    liftIO $ print $ compare (ps !! 0) (ps !! 2)
-    liftIO $ print $ compare (ps !! 1) (ps !! 1)
-    liftIO $ print $ compare (ps !! 2) (ps !! 2)
-    liftIO $ print $ L.sort $ (T.pathNodes $ ps !! 1) ++ (T.pathNodes $ ps !! 2)
-    liftIO $ print $ L.sort $ (T.pathRels $ ps !! 1) ++ (T.pathRels $ ps !! 2)
-    let rels = L.sort $ (T.pathRels $ ps !! 1) ++ (T.pathRels $ ps !! 2)
-    liftIO $ print $ compare (rels !! 0) (rels !! 1)
-    liftIO $ print $ compare (rels !! 1) (rels !! 1)
-    liftIO $ print $ "A " ++ (show $ rels !! 0)
-    liftIO $ print $ "B " ++ (show $ rels !! 1)
-    let (Relationship rpath rtype rprop rfrom rto) = rels !! 0
-    let (Relationship rpathb rtypeb rpropb rfromb rtob) = rels !! 1
-    liftIO $ print $ compare rpath rpathb
-    liftIO $ print $ compare rtype rtypeb
-    liftIO $ print $ compare rfrom rfromb
-    liftIO $ print $ compare rto rtob
+    let checkPath' = \p nodes rels -> (L.sort $ map _getNode nodes) == (L.sort $ T.pathNodes p) &&
+                                      (L.sort $ map _getRel rels) == (L.sort $ T.pathRels p)
     checkPath (ps !! 0) ["Root"] []
-    checkPath (ps !! 2) ["Root", "Mattias"] ["Root-Mattias"]
-    checkPath (ps !! 1) ["Root", "Johan"] ["Root-Johan"]
+    if checkPath' (ps !! 1) ["Root", "Johan"] ["Root-Johan"]
+       then checkPath (ps !! 1) ["Root", "Johan"] ["Root-Johan"]
+       else checkPath (ps !! 1) ["Root", "Mattias"] ["Root-Mattias"]
+    if checkPath' (ps !! 2) ["Root", "Johan"] ["Root-Johan"]
+       then checkPath (ps !! 2) ["Root", "Johan"] ["Root-Johan"]
+       else checkPath (ps !! 2) ["Root", "Mattias"] ["Root-Mattias"]
     cleanUpTraversalTest g
 
 -- | Test a traversal with an unexisting start
