@@ -1692,9 +1692,15 @@ case_defaultTraversalFullPath = withConnection host port $ do
     let checkPath = \p nodes rels -> do
         neo4jEqual (L.sort $ map _getNode nodes) (L.sort $ T.pathNodes p)
         neo4jEqual (L.sort $ map _getRel rels) (L.sort $ T.pathRels p)
+    let checkPath' = \p nodes rels -> (L.sort $ map _getNode nodes) == (L.sort $ T.pathNodes p) &&
+                                      (L.sort $ map _getRel rels) == (L.sort $ T.pathRels p)
     checkPath (ps !! 0) ["Root"] []
-    checkPath (ps !! 1) ["Root", "Johan"] ["Root-Johan"]
-    checkPath (ps !! 2) ["Root", "Mattias"] ["Root-Mattias"]
+    if checkPath' (ps !! 1) ["Root", "Johan"] ["Root-Johan"]
+       then checkPath (ps !! 1) ["Root", "Johan"] ["Root-Johan"]
+       else checkPath (ps !! 1) ["Root", "Mattias"] ["Root-Mattias"]
+    if checkPath' (ps !! 2) ["Root", "Johan"] ["Root-Johan"]
+       then checkPath (ps !! 2) ["Root", "Johan"] ["Root-Johan"]
+       else checkPath (ps !! 2) ["Root", "Mattias"] ["Root-Mattias"]
     cleanUpTraversalTest g
 
 -- | Test a traversal with an unexisting start
