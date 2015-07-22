@@ -41,7 +41,7 @@ Test-Suite test-haskell-neo4j-rest-client
                    , bytestring                  == 0.10.*
                    , test-framework              == 0.8.*
                    , test-framework-quickcheck2  == 0.3.*
-                   , QuickCheck                  >= 2.7.*
+                   , QuickCheck                  >= 2.7.0
                    , test-framework-hunit        == 0.3.*
                    , test-framework-th           == 0.2.*
                    , HUnit                       == 1.2.*
