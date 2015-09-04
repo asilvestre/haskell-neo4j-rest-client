@@ -47,6 +47,7 @@ Test-Suite test-haskell-neo4j-rest-client
                    , HUnit                       >= 1.2
                    , Cabal
                    , text                        >= 1.1
+                   , http-client                 >= 0.4
                    , http-conduit                >= 2.1
                    , http-types                  >= 0.8
                    , resourcet                   >= 1.1
@@ -75,6 +76,7 @@ library
   build-depends:       base                  == 4.*
                      , containers            >= 0.5
                      , text                  >= 1.1
+                     , http-client           >= 0.4
                      , http-conduit          >= 2.1
                      , http-types            >= 0.8
                      , bytestring            >= 0.10
