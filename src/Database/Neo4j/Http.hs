@@ -24,11 +24,13 @@ import Database.Neo4j.Types
 -- | Create a new connection that can be manually closed with runResourceT
 newConnection :: Hostname -> Port -> IO Connection
 newConnection hostname port = do
+        --use tlsManagerSettings instead of conduitManagerSettings
         mgr <- HC.newManager HC.conduitManagerSettings
         return $ Connection hostname port mgr
 
 -- | Run a set of Neo4j commands in a single connection
-withConnection :: Hostname -> Port -> Neo4j a -> IO a 
+withConnection :: Hostname -> Port -> Neo4j a -> IO a
+--use 'newManager tlsManagerSettings' instead of withManager
 withConnection hostname port cmds = runResourceT $ HC.withManager $
          \mgr -> liftIO $ runNeo4j cmds $ Connection hostname port mgr
         
