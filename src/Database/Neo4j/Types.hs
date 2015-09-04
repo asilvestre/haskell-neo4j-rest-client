@@ -318,10 +318,18 @@ data Neo4jException = Neo4jHttpException String |
 instance Exception Neo4jException
 
 -- | Type for a connection
-data Connection = Connection {dbHostname :: Hostname, dbPort :: Port, manager :: HC.Manager}
+data Connection = Connection {dbHostname :: Hostname
+                             ,dbPort :: Port
+                             ,manager :: HC.Manager
+                             ,dbCredentials :: Maybe Credentials
+                             }
 
 type Hostname = S.ByteString
 type Port = Int
+
+type Credentials = (Username, Password)
+type Username = S.ByteString
+type Password = S.ByteString
 
 -- | Neo4j monadic type to be able to sequence neo4j commands in a connection
 newtype Neo4j a = Neo4j { runNeo4j :: Connection -> IO a }
