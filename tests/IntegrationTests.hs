@@ -83,6 +83,9 @@ port = 7474
 host :: Hostname
 host = "localhost"
 
+creds :: Credentials
+creds = ("neo4j","test")
+
 someOtherProperties :: Properties
 someOtherProperties = M.fromList ["hola" |: ("adeu" :: T.Text), "proparray" |: ["a" :: T.Text, "", "adeu"]]
 
@@ -99,9 +102,14 @@ case_NoConnection = assertException expException $ withConnection "localhost" 77
     where expException = Neo4jHttpException "FailedConnectionException2 \"localhost\" 77 False connect: failed\
                                              \ (Connection refused (WSAECONNREFUSED))"
 
+-- | Test connecting to a server with improper credentials
+case_ImproperCredentials :: Assertion
+case_ImproperCredentials = assertException expException $ withConnection host port $ createNode someProperties
+    where expException = Neo4jUnexpectedResponseException HT.status401
+
 -- | Test get and create a node
 case_CreateGetDeleteNode :: Assertion
-case_CreateGetDeleteNode = withConnection host port $ do
+case_CreateGetDeleteNode = withConnectionWithAuth host port creds $ do
     n <- createNode someProperties
     newN <- getNode n
     neo4jEqual (Just n) newN
@@ -109,7 +117,7 @@ case_CreateGetDeleteNode = withConnection host port $ do
 
 -- | Test delete and get a node
 case_CreateDeleteGetNode :: Assertion
-case_CreateDeleteGetNode = withConnection host port $ do
+case_CreateDeleteGetNode = withConnectionWithAuth host port creds $ do
     n <- createNode someProperties
     deleteNode n
     newN <- getNode n
@@ -117,14 +125,14 @@ case_CreateDeleteGetNode = withConnection host port $ do
 
 -- | Test double delete
 case_DoubleDeleteNode :: Assertion
-case_DoubleDeleteNode = withConnection host port $ do
+case_DoubleDeleteNode = withConnectionWithAuth host port creds $ do
     n <- createNode someProperties
     deleteNode n
     deleteNode n
 
 -- | Test get node by id
 case_GetNodeById :: Assertion
-case_GetNodeById = withConnection host port $ do
+case_GetNodeById = withConnectionWithAuth host port creds $ do
     n <- createNode someProperties
     newN <- getNode (nodeId n)
     neo4jEqual (Just n) newN
@@ -132,23 +140,23 @@ case_GetNodeById = withConnection host port $ do
 
 -- | Test get node with unexisting id
 case_GetUnexistingNodeById :: Assertion
-case_GetUnexistingNodeById = withConnection host port $ do
+case_GetUnexistingNodeById = withConnectionWithAuth host port creds $ do
     newN <- getNode ("unexistingnode" :: S.ByteString)
     neo4jEqual Nothing newN
         
 -- | Test delete node by id
 case_DeleteNodeById :: Assertion
-case_DeleteNodeById = withConnection host port $ do
+case_DeleteNodeById = withConnectionWithAuth host port creds $ do
     n <- createNode someProperties
     deleteNode (nodeId n)
 
 -- | Test delete unexisting node by id
 case_DeleteUnexistingNodeById :: Assertion
-case_DeleteUnexistingNodeById = withConnection host port $ deleteNode ("unexistingnode" :: S.ByteString)
+case_DeleteUnexistingNodeById = withConnectionWithAuth host port creds $ deleteNode ("unexistingnode" :: S.ByteString)
 
 -- | Refresh node properties from the DB
 case_getNodeProperties :: Assertion
-case_getNodeProperties = withConnection host port $ do
+case_getNodeProperties = withConnectionWithAuth host port creds $ do
     n <- createNode someProperties
     props <- getProperties n
     neo4jEqual someProperties props
@@ -157,15 +165,15 @@ case_getNodeProperties = withConnection host port $ do
 -- | Get node properties from a deleted node
 case_getDeletedNodeProperties :: Assertion
 case_getDeletedNodeProperties = do
-        n <- withConnection host port $ createNode someProperties
+        n <- withConnectionWithAuth host port creds $ createNode someProperties
         let expException = Neo4jNoEntityException $ runNodeIdentifier n
-        assertException expException $ withConnection host port $ do
+        assertException expException $ withConnectionWithAuth host port creds $ do
             deleteNode n
             getProperties n
 
 -- | Get a property from a node
 case_getNodeProperty :: Assertion
-case_getNodeProperty = withConnection host port $ do
+case_getNodeProperty = withConnectionWithAuth host port creds $ do
     n <- createNode someProperties
     prop <- getProperty n "intarray"
     neo4jEqual (M.lookup "intarray" someProperties) prop
@@ -173,7 +181,7 @@ case_getNodeProperty = withConnection host port $ do
 
 -- | Get an unexisting property from a node
 case_getNodeUnexistingProperty :: Assertion
-case_getNodeUnexistingProperty = withConnection host port $ do
+case_getNodeUnexistingProperty = withConnectionWithAuth host port creds $ do
     n <- createNode someProperties
     prop <- getProperty n "noproperty"
     neo4jEqual Nothing prop
@@ -182,16 +190,16 @@ case_getNodeUnexistingProperty = withConnection host port $ do
 -- | Get a property from an unexisting node
 case_getUnexistingNodeProperty :: Assertion
 case_getUnexistingNodeProperty = do
-    n <- withConnection host port $ createNode someProperties
+    n <- withConnectionWithAuth host port creds $ createNode someProperties
     let expException = Neo4jNoEntityException $ runNodeIdentifier n
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteNode n
         _ <- getProperty n "noproperty"
         return ()
 
 -- | Get change the properties of a node
 case_changeNodeProperties :: Assertion
-case_changeNodeProperties = withConnection host port $ do
+case_changeNodeProperties = withConnectionWithAuth host port creds $ do
         n <- createNode someProperties
         newN <- setProperties n otherProperties
         neo4jEqual otherProperties (getNodeProperties newN)
@@ -203,15 +211,15 @@ case_changeNodeProperties = withConnection host port $ do
 -- | Get change the properties of a node that doesn't exist
 case_changeUnexistingNodeProperties :: Assertion
 case_changeUnexistingNodeProperties = do
-    n <- withConnection host port $ createNode someProperties
+    n <- withConnectionWithAuth host port creds $ createNode someProperties
     let expException = Neo4jNoEntityException $ runNodeIdentifier n
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteNode n
         setProperties n someProperties
 
 -- | Change a property of a node
 case_changeNodeProperty :: Assertion
-case_changeNodeProperty = withConnection host port $ do
+case_changeNodeProperty = withConnectionWithAuth host port creds $ do
         n <- createNode someProperties
         newN <- setProperty n otherValName otherVal
         neo4jEqual otherProperties (getNodeProperties newN)
@@ -224,7 +232,7 @@ case_changeNodeProperty = withConnection host port $ do
 
 -- | Change an array property of a node to empty
 case_changeNodePropertyToEmpty :: Assertion
-case_changeNodePropertyToEmpty = withConnection host port $ do
+case_changeNodePropertyToEmpty = withConnectionWithAuth host port creds $ do
         n <- createNode someProperties
         newN <- setProperty n otherValName otherVal
         neo4jEqual otherProperties (getNodeProperties newN)
@@ -237,7 +245,7 @@ case_changeNodePropertyToEmpty = withConnection host port $ do
 
 -- | Set an unexisting property of a node
 case_changeNodeUnexistingProperty :: Assertion
-case_changeNodeUnexistingProperty = withConnection host port $ do
+case_changeNodeUnexistingProperty = withConnectionWithAuth host port creds $ do
         n <- createNode someProperties
         newN <- setProperty n otherValName otherVal
         neo4jEqual otherProperties (getNodeProperties newN)
@@ -251,9 +259,9 @@ case_changeNodeUnexistingProperty = withConnection host port $ do
 -- | Set property of an unexisting node
 case_changeUnexistingNodeProperty :: Assertion
 case_changeUnexistingNodeProperty = do
-    n <- withConnection host port $ createNode someProperties
+    n <- withConnectionWithAuth host port creds $ createNode someProperties
     let expException = Neo4jNoEntityException $ runNodeIdentifier n
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteNode n
         _ <- setProperty n otherValName otherVal
         return ()
@@ -262,7 +270,7 @@ case_changeUnexistingNodeProperty = do
 
 -- | Delete node properties
 case_deleteNodeProperties :: Assertion
-case_deleteNodeProperties = withConnection host port $ do
+case_deleteNodeProperties = withConnectionWithAuth host port creds $ do
     n <- createNode someProperties
     newN <- deleteProperties n
     neo4jEqual M.empty (getNodeProperties newN)
@@ -273,16 +281,16 @@ case_deleteNodeProperties = withConnection host port $ do
 -- | Delete unexisting node properties
 case_deleteUnexistingNodeProperties :: Assertion
 case_deleteUnexistingNodeProperties = do
-    n <- withConnection host port $ createNode someProperties
+    n <- withConnectionWithAuth host port creds $ createNode someProperties
     let expException = Neo4jNoEntityException $ runNodeIdentifier n
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteNode n
         _ <- deleteProperties n
         return ()
 
 -- | Delete a node property
 case_deleteNodeProperty :: Assertion
-case_deleteNodeProperty = withConnection host port $ do
+case_deleteNodeProperty = withConnectionWithAuth host port creds $ do
         n <- createNode someProperties
         newN <- deleteProperty n valName
         neo4jEqual otherProperties (getNodeProperties newN)
@@ -294,7 +302,7 @@ case_deleteNodeProperty = withConnection host port $ do
 
 -- | Delete an unexisting property from a node
 case_deleteNodeUnexistingProperty :: Assertion
-case_deleteNodeUnexistingProperty = withConnection host port $ do
+case_deleteNodeUnexistingProperty = withConnectionWithAuth host port creds $ do
         n <- createNode someProperties
         newN <- deleteProperty n valName
         neo4jEqual otherProperties (getNodeProperties newN)
@@ -307,9 +315,9 @@ case_deleteNodeUnexistingProperty = withConnection host port $ do
 -- | Delete a property from an unexisting node
 case_deleteUnexistingNodeProperty :: Assertion
 case_deleteUnexistingNodeProperty = do
-    n <- withConnection host port $ createNode someProperties
+    n <- withConnectionWithAuth host port creds $ createNode someProperties
     let expException = Neo4jNoEntityException $ runNodeIdentifier n
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteNode n
         _ <- deleteProperty n valName
         return ()
@@ -331,14 +339,14 @@ teardownRelTests f t r = do
 -- | Delete a node with a relationship
 case_deleteNodeWithRelationship :: Assertion
 case_deleteNodeWithRelationship = do
-    (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+    (nodeFrom, nodeTo, r) <- withConnectionWithAuth host port creds setupRelTests
     let expException = Neo4jNonOrphanNodeDeletionException $ runNodeIdentifier nodeFrom
-    assertException expException $ withConnection host port $ deleteNode nodeFrom
-    withConnection host port $ teardownRelTests nodeFrom nodeTo r
+    assertException expException $ withConnectionWithAuth host port creds $ deleteNode nodeFrom
+    withConnectionWithAuth host port creds $ teardownRelTests nodeFrom nodeTo r
     
 -- | Test get and create a relationship
 case_CreateGetDeleteRelationship :: Assertion
-case_CreateGetDeleteRelationship = withConnection host port $ do
+case_CreateGetDeleteRelationship = withConnectionWithAuth host port creds $ do
     (nodeFrom, nodeTo, r) <- setupRelTests
     newN <- getRelationship r
     neo4jEqual (Just r) newN
@@ -346,7 +354,7 @@ case_CreateGetDeleteRelationship = withConnection host port $ do
 
 -- | Test get all relationship properties
 case_allRelationshipProperties :: Assertion
-case_allRelationshipProperties = withConnection host port $ do
+case_allRelationshipProperties = withConnectionWithAuth host port creds $ do
     (nodeFrom, nodeTo, r) <- setupRelTests
     rs <- allRelationshipTypes
     neo4jBool $ myRelType `elem` rs
@@ -354,7 +362,7 @@ case_allRelationshipProperties = withConnection host port $ do
 
 -- | Test get the start and end of a relationship
 case_relationshipFromTo :: Assertion
-case_relationshipFromTo = withConnection host port $ do
+case_relationshipFromTo = withConnectionWithAuth host port creds $ do
     (nodeFrom, nodeTo, r) <- setupRelTests
     nfrom <- getRelationshipFrom r
     neo4jEqual nodeFrom nfrom
@@ -365,60 +373,60 @@ case_relationshipFromTo = withConnection host port $ do
 -- | Test get the start of relationship that doesn't exist any more
 case_nonExistingRelationshipFrom :: Assertion
 case_nonExistingRelationshipFrom = do
-    (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+    (nodeFrom, nodeTo, r) <- withConnectionWithAuth host port creds setupRelTests
     let expException = Neo4jNoEntityException $ runNodeIdentifier nodeFrom
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteRelationship r
         deleteNode nodeFrom
         n <- getRelationshipFrom r
         neo4jEqual nodeFrom n -- Doing this to force the evaluation of n (the exception is thrown after parsing)
         return ()
-    withConnection host port $ teardownRelTests nodeFrom nodeTo r
+    withConnectionWithAuth host port creds $ teardownRelTests nodeFrom nodeTo r
 
 -- | Test get the end of relationship that doesn't exist any more
 case_nonExistingRelationshipTo :: Assertion
 case_nonExistingRelationshipTo = do
-    (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+    (nodeFrom, nodeTo, r) <- withConnectionWithAuth host port creds setupRelTests
     let expException = Neo4jNoEntityException $ runNodeIdentifier nodeTo
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteRelationship r
         deleteNode nodeTo
         n <- getRelationshipTo r
         neo4jEqual nodeTo n -- Doing this to force the evaluation of n (the exception is thrown after parsing)
         return ()
-    withConnection host port $ teardownRelTests nodeFrom nodeTo r
+    withConnectionWithAuth host port creds $ teardownRelTests nodeFrom nodeTo r
 
 -- | Create relationship with missing node from
 case_CreateRelationshipMissingFrom :: Assertion
 case_CreateRelationshipMissingFrom = do
-    (nodeFrom, nodeTo) <- withConnection host port $ do
+    (nodeFrom, nodeTo) <- withConnectionWithAuth host port creds $ do
         nodeFrom <- createNode anotherProperties
         nodeTo <- createNode someOtherProperties
         return (nodeFrom, nodeTo)
     let expException = Neo4jNoEntityException $ runNodeIdentifier nodeFrom
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteNode nodeFrom
         _ <- createRelationship myRelType someProperties nodeFrom nodeTo
         return ()
-    withConnection host port $ deleteNode nodeTo
+    withConnectionWithAuth host port creds $ deleteNode nodeTo
 
 -- | Create relationship with missing node to
 case_CreateRelationshipMissingTo :: Assertion
 case_CreateRelationshipMissingTo = do
-    (nodeFrom, nodeTo) <- withConnection host port $ do
+    (nodeFrom, nodeTo) <- withConnectionWithAuth host port creds $ do
         nodeFrom <- createNode anotherProperties
         nodeTo <- createNode someOtherProperties
         return (nodeFrom, nodeTo)
     let expException = Neo4jNoEntityException $ runNodeIdentifier nodeTo
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteNode nodeTo 
         _ <- createRelationship myRelType someProperties nodeFrom nodeTo
         return ()
-    withConnection host port $ deleteNode nodeFrom
+    withConnectionWithAuth host port creds $ deleteNode nodeFrom
 
 -- | Test delete and get a relationship
 case_CreateDeleteGetRelationship :: Assertion
-case_CreateDeleteGetRelationship = withConnection host port $ do
+case_CreateDeleteGetRelationship = withConnectionWithAuth host port creds $ do
     (nodeFrom, nodeTo, r) <- setupRelTests
     deleteRelationship r
     newN <- getRelationship r
@@ -427,7 +435,7 @@ case_CreateDeleteGetRelationship = withConnection host port $ do
 
 -- | Test double delete
 case_DoubleDeleteRelationship :: Assertion
-case_DoubleDeleteRelationship = withConnection host port $ do
+case_DoubleDeleteRelationship = withConnectionWithAuth host port creds $ do
     (nodeFrom, nodeTo, r) <- setupRelTests
     deleteRelationship r
     deleteRelationship r
@@ -435,7 +443,7 @@ case_DoubleDeleteRelationship = withConnection host port $ do
 
 -- | Test get relationship by id
 case_GetRelationshipById :: Assertion
-case_GetRelationshipById = withConnection host port $ do
+case_GetRelationshipById = withConnectionWithAuth host port creds $ do
     (nodeFrom, nodeTo, r) <- setupRelTests
     newN <- getRelationship (relId r)
     neo4jEqual (Just r) newN
@@ -443,25 +451,25 @@ case_GetRelationshipById = withConnection host port $ do
 
 -- | Test get relationship with unexisting id
 case_GetUnexistingRelationshipById :: Assertion
-case_GetUnexistingRelationshipById = withConnection host port $ do
+case_GetUnexistingRelationshipById = withConnectionWithAuth host port creds $ do
     newN <- getRelationship ("unexistingrelationship" :: S.ByteString)
     neo4jEqual Nothing newN
         
 -- | Test delete relationship by id
 case_DeleteRelationshipById :: Assertion
-case_DeleteRelationshipById = withConnection host port $ do
+case_DeleteRelationshipById = withConnectionWithAuth host port creds $ do
     (nodeFrom, nodeTo, r) <- setupRelTests
     deleteRelationship (relId r)
     teardownRelTests nodeFrom nodeTo r
 
 -- | Test delete unexisting relationship by id
 case_DeleteUnexistingRelationshipById :: Assertion
-case_DeleteUnexistingRelationshipById = withConnection host port $ 
+case_DeleteUnexistingRelationshipById = withConnectionWithAuth host port creds $ 
         deleteRelationship ("unexistingrelationship" :: S.ByteString)
 
 -- | Refresh relationship properties from the DB
 case_getRelationshipProperties :: Assertion
-case_getRelationshipProperties = withConnection host port $ do
+case_getRelationshipProperties = withConnectionWithAuth host port creds $ do
     (nodeFrom, nodeTo, r) <- setupRelTests
     props <- getProperties r
     neo4jEqual someProperties props
@@ -470,9 +478,9 @@ case_getRelationshipProperties = withConnection host port $ do
 -- | Get relationship properties from a deleted node
 case_getDeletedRelationshipProperties :: Assertion
 case_getDeletedRelationshipProperties = do
-    (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+    (nodeFrom, nodeTo, r) <- withConnectionWithAuth host port creds setupRelTests
     let expException = Neo4jNoEntityException $ runRelIdentifier r
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteRelationship r
         deleteNode nodeFrom
         deleteNode nodeTo
@@ -480,7 +488,7 @@ case_getDeletedRelationshipProperties = do
 
 -- | Get a property from a relationship
 case_getRelationshipProperty :: Assertion
-case_getRelationshipProperty = withConnection host port $ do
+case_getRelationshipProperty = withConnectionWithAuth host port creds $ do
     (nodeFrom, nodeTo, r) <- setupRelTests
     prop <- getProperty r "intarray"
     neo4jEqual (M.lookup "intarray" someProperties) prop
@@ -488,7 +496,7 @@ case_getRelationshipProperty = withConnection host port $ do
 
 -- | Get an unexisting property from a relationship
 case_getRelationshipUnexistingProperty :: Assertion
-case_getRelationshipUnexistingProperty = withConnection host port $ do
+case_getRelationshipUnexistingProperty = withConnectionWithAuth host port creds $ do
     (nodeFrom, nodeTo, r) <- setupRelTests
     prop <- getProperty r "noproperty"
     neo4jEqual Nothing prop
@@ -497,16 +505,16 @@ case_getRelationshipUnexistingProperty = withConnection host port $ do
 -- | Get a property from an unexisting relationship
 case_getUnexistingRelationshipProperty :: Assertion
 case_getUnexistingRelationshipProperty = do
-    (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+    (nodeFrom, nodeTo, r) <- withConnectionWithAuth host port creds setupRelTests
     let expException = Neo4jNoEntityException $ runRelIdentifier r
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         teardownRelTests nodeFrom nodeTo r
         _ <- getProperty r "noproperty"
         return ()
 
 -- | Get change the properties of a relationship
 case_changeRelationshipProperties :: Assertion
-case_changeRelationshipProperties = withConnection host port $ do
+case_changeRelationshipProperties = withConnectionWithAuth host port creds $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         newN <- setProperties r otherProperties
         neo4jEqual otherProperties (getRelProperties newN)
@@ -518,9 +526,9 @@ case_changeRelationshipProperties = withConnection host port $ do
 -- | Get change the properties of a relationship that doesn't exist
 case_changeUnexistingRelationshipProperties :: Assertion
 case_changeUnexistingRelationshipProperties = do
-    (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+    (nodeFrom, nodeTo, r) <- withConnectionWithAuth host port creds setupRelTests
     let expException = Neo4jNoEntityException $ runRelIdentifier r
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteRelationship r
         deleteNode nodeFrom
         deleteNode nodeTo
@@ -528,7 +536,7 @@ case_changeUnexistingRelationshipProperties = do
 
 -- | Change a property of a relationship
 case_changeRelationshipProperty :: Assertion
-case_changeRelationshipProperty = withConnection host port $ do
+case_changeRelationshipProperty = withConnectionWithAuth host port creds $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         newN <- setProperty r otherValName otherVal
         neo4jEqual otherProperties (getRelProperties newN)
@@ -541,7 +549,7 @@ case_changeRelationshipProperty = withConnection host port $ do
 
 -- | Change an array property of a relationship to empty
 case_changeRelationshipPropertyToEmpty :: Assertion
-case_changeRelationshipPropertyToEmpty = withConnection host port $ do
+case_changeRelationshipPropertyToEmpty = withConnectionWithAuth host port creds $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         newN <- setProperty r otherValName otherVal
         neo4jEqual otherProperties (getRelProperties newN)
@@ -554,7 +562,7 @@ case_changeRelationshipPropertyToEmpty = withConnection host port $ do
 
 -- | Set an unexisting property of a relationship
 case_changeRelationshipUnexistingProperty :: Assertion
-case_changeRelationshipUnexistingProperty = withConnection host port $ do
+case_changeRelationshipUnexistingProperty = withConnectionWithAuth host port creds $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         newN <- setProperty r otherValName otherVal
         neo4jEqual otherProperties (getRelProperties newN)
@@ -568,19 +576,19 @@ case_changeRelationshipUnexistingProperty = withConnection host port $ do
 -- | Set property of an unexisting node
 case_changeUnexistingRelationshipProperty :: Assertion
 case_changeUnexistingRelationshipProperty = do
-    (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+    (nodeFrom, nodeTo, r) <- withConnectionWithAuth host port creds setupRelTests
     let expException = Neo4jNoEntityException $ runRelIdentifier r
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteRelationship r
         _ <- setProperty r otherValName otherVal
         return ()
-    withConnection host port $ teardownRelTests nodeFrom nodeTo r
+    withConnectionWithAuth host port creds $ teardownRelTests nodeFrom nodeTo r
     where otherValName = "mynewbool"
           otherVal = newval False
 
 -- | Delete relationship properties
 case_deleteRelationshipProperties :: Assertion
-case_deleteRelationshipProperties = withConnection host port $ do
+case_deleteRelationshipProperties = withConnectionWithAuth host port creds $ do
     (nodeFrom, nodeTo, r) <- setupRelTests
     newN <- deleteProperties r
     neo4jEqual M.empty (getRelProperties newN)
@@ -591,17 +599,17 @@ case_deleteRelationshipProperties = withConnection host port $ do
 -- | Delete unexisting relationship properties
 case_deleteUnexistingRelationshipProperties :: Assertion
 case_deleteUnexistingRelationshipProperties = do
-    (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+    (nodeFrom, nodeTo, r) <- withConnectionWithAuth host port creds setupRelTests
     let expException = Neo4jNoEntityException $ runRelIdentifier r 
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteRelationship r
         _ <- deleteProperties r
         return ()
-    withConnection host port $ teardownRelTests nodeFrom nodeTo r
+    withConnectionWithAuth host port creds $ teardownRelTests nodeFrom nodeTo r
 
 -- | Delete a relationship property
 case_deleteRelationshipProperty :: Assertion
-case_deleteRelationshipProperty = withConnection host port $ do
+case_deleteRelationshipProperty = withConnectionWithAuth host port creds $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         newN <- deleteProperty r valName
         neo4jEqual otherProperties (getRelProperties newN)
@@ -613,7 +621,7 @@ case_deleteRelationshipProperty = withConnection host port $ do
 
 -- | Delete an unexisting property from a relationship
 case_deleteRelationshipUnexistingProperty :: Assertion
-case_deleteRelationshipUnexistingProperty = withConnection host port $ do
+case_deleteRelationshipUnexistingProperty = withConnectionWithAuth host port creds $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         newN <- deleteProperty r valName
         neo4jEqual otherProperties (getRelProperties newN)
@@ -626,18 +634,18 @@ case_deleteRelationshipUnexistingProperty = withConnection host port $ do
 -- | Delete a property from an unexisting relationship
 case_deleteUnexistingRelationshipProperty :: Assertion
 case_deleteUnexistingRelationshipProperty = do
-        (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+        (nodeFrom, nodeTo, r) <- withConnectionWithAuth host port creds setupRelTests
         let expException = Neo4jNoEntityException $ runRelIdentifier r 
-        assertException expException $ withConnection host port $ do
+        assertException expException $ withConnectionWithAuth host port creds $ do
             deleteRelationship r
             _ <- deleteProperty r valName
             return ()
-        withConnection host port $ teardownRelTests nodeFrom nodeTo r
+        withConnectionWithAuth host port creds $ teardownRelTests nodeFrom nodeTo r
     where valName = "noproperty"
 
 -- | Get relationships for a node
 case_GetNodeRelationships :: Assertion
-case_GetNodeRelationships = withConnection host port $ do
+case_GetNodeRelationships = withConnectionWithAuth host port creds $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         -- test getting relationships for the origin node
         rsAny <- getRelationships nodeFrom Any []
@@ -658,16 +666,16 @@ case_GetNodeRelationships = withConnection host port $ do
 -- | Get relationships for an unexisting node
 case_GetUnexistingNodeRelationships :: Assertion
 case_GetUnexistingNodeRelationships = do
-        (nodeFrom, nodeTo, r) <- withConnection host port setupRelTests
+        (nodeFrom, nodeTo, r) <- withConnectionWithAuth host port creds setupRelTests
         let expException = Neo4jNoEntityException $ runNodeIdentifier nodeFrom
-        assertException expException $ withConnection host port $ do
+        assertException expException $ withConnectionWithAuth host port creds $ do
             teardownRelTests nodeFrom nodeTo r
             _ <- getRelationships nodeFrom Any []
             return ()
 
 -- | Get relationships for a node with multiple relationships
 case_GetNodeRelationshipsMultiple :: Assertion
-case_GetNodeRelationshipsMultiple = withConnection host port $ do
+case_GetNodeRelationshipsMultiple = withConnectionWithAuth host port creds $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         r2 <- createRelationship myRelType someOtherProperties nodeTo nodeFrom
         rsAny <- getRelationships nodeFrom Any []
@@ -683,7 +691,7 @@ case_GetNodeRelationshipsMultiple = withConnection host port $ do
 
 -- | Get relationships for a node with a type filter
 case_GetNodeRelationshipsWithType :: Assertion
-case_GetNodeRelationshipsWithType = withConnection host port $ do
+case_GetNodeRelationshipsWithType = withConnectionWithAuth host port creds $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         rsAny <- getRelationships nodeFrom Any [myRelType]
         neo4jEqual [r] rsAny
@@ -691,7 +699,7 @@ case_GetNodeRelationshipsWithType = withConnection host port $ do
 
 -- | Get relationships for a node with an unexisting type filter
 case_GetNodeRelationshipsWithUnexistingType :: Assertion
-case_GetNodeRelationshipsWithUnexistingType = withConnection host port $ do
+case_GetNodeRelationshipsWithUnexistingType = withConnectionWithAuth host port creds $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         rsAny <- getRelationships nodeFrom Any ["notype"]
         neo4jEqual [] rsAny
@@ -699,7 +707,7 @@ case_GetNodeRelationshipsWithUnexistingType = withConnection host port $ do
 
 -- | Get relationships for a node with a type filter with multiple elements
 case_GetNodeRelationshipsWithTypes :: Assertion
-case_GetNodeRelationshipsWithTypes = withConnection host port $ do
+case_GetNodeRelationshipsWithTypes = withConnectionWithAuth host port creds $ do
         (nodeFrom, nodeTo, r) <- setupRelTests
         -- Create another relationship with another type
         r2 <- createRelationship type2 anotherProperties nodeTo nodeFrom
@@ -713,7 +721,7 @@ case_GetNodeRelationshipsWithTypes = withConnection host port $ do
 
 -- | Get all labels in the DB (We don't have control of all the labels the DB has)
 case_getLabels :: Assertion
-case_getLabels = withConnection host port $ do
+case_getLabels = withConnectionWithAuth host port creds $ do
         n <- createNode someProperties
         addLabels [lbl] n
         lbls <- allLabels
@@ -723,7 +731,7 @@ case_getLabels = withConnection host port $ do
 
 -- | Get labels for a node it doesn't have any
 case_getNodeLabelsWithNone :: Assertion
-case_getNodeLabelsWithNone = withConnection host port $ do
+case_getNodeLabelsWithNone = withConnectionWithAuth host port creds $ do
     n <- createNode someProperties
     lbls <- getLabels n
     neo4jEqual [] lbls
@@ -732,16 +740,16 @@ case_getNodeLabelsWithNone = withConnection host port $ do
 -- | Get labels for an unexisting node
 case_getUnexistingNodeLabels :: Assertion
 case_getUnexistingNodeLabels = do
-    n <- withConnection host port $ createNode someProperties
+    n <- withConnectionWithAuth host port creds $ createNode someProperties
     let expException = Neo4jNoEntityException $ runNodeIdentifier n
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteNode n
         _ <- getLabels n
         return ()
 
 -- | Add labels to a node and get them
 case_getAddAndGetNodeLabels :: Assertion
-case_getAddAndGetNodeLabels = withConnection host port $ do
+case_getAddAndGetNodeLabels = withConnectionWithAuth host port creds $ do
         n <- createNode someProperties
         addLabels [lbl1, lbl2] n
         addLabels [lbl3] n
@@ -756,15 +764,15 @@ case_getAddAndGetNodeLabels = withConnection host port $ do
 -- | Add labels to an unexisting node
 case_addUnexistingNodeLabels :: Assertion
 case_addUnexistingNodeLabels = do 
-    n <- withConnection host port $ createNode someProperties
+    n <- withConnectionWithAuth host port creds $ createNode someProperties
     let expException = Neo4jNoEntityException $ runNodeIdentifier n
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteNode n
         addLabels ["mylabel"] n
 
 -- | Change node labels
 case_changeNodeLabels :: Assertion
-case_changeNodeLabels = withConnection host port $ do
+case_changeNodeLabels = withConnectionWithAuth host port creds $ do
         n <- createNode someProperties
         addLabels [lbl1, lbl2] n
         changeLabels [lbl3] n
@@ -777,7 +785,7 @@ case_changeNodeLabels = withConnection host port $ do
 
 -- | Change node labels to empty
 case_changeNodeLabelsToEmpty :: Assertion
-case_changeNodeLabelsToEmpty = withConnection host port $ do
+case_changeNodeLabelsToEmpty = withConnectionWithAuth host port creds $ do
         n <- createNode someProperties
         addLabels [lbl1, lbl2] n
         changeLabels [] n
@@ -790,15 +798,15 @@ case_changeNodeLabelsToEmpty = withConnection host port $ do
 -- | Change labels for an unexisting node
 case_changeUnexistingNodeLabels :: Assertion
 case_changeUnexistingNodeLabels = do 
-    n <- withConnection host port $ createNode someProperties
+    n <- withConnectionWithAuth host port creds $ createNode someProperties
     let expException = Neo4jNoEntityException $ runNodeIdentifier n
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteNode n
         changeLabels ["mylabel"] n
 
 -- | Remove a label from a node
 case_removeNodeLabel :: Assertion
-case_removeNodeLabel = withConnection host port $ do
+case_removeNodeLabel = withConnectionWithAuth host port creds $ do
         n <- createNode someProperties
         addLabels [lbl1, lbl2] n
         removeLabel lbl1 n
@@ -810,7 +818,7 @@ case_removeNodeLabel = withConnection host port $ do
 
 -- | Remove an unexisting label from a node (nothing should happen)
 case_removeNodeUnexistingLabel :: Assertion
-case_removeNodeUnexistingLabel = withConnection host port $ do
+case_removeNodeUnexistingLabel = withConnectionWithAuth host port creds $ do
         n <- createNode someProperties
         addLabels [lbl1] n
         removeLabel "nolabel" n
@@ -822,15 +830,15 @@ case_removeNodeUnexistingLabel = withConnection host port $ do
 -- | Remove label for an unexisting node
 case_removeUnexistingNodeLabel :: Assertion
 case_removeUnexistingNodeLabel = do 
-    n <- withConnection host port $ createNode someProperties
+    n <- withConnectionWithAuth host port creds $ createNode someProperties
     let expException = Neo4jNoEntityException $ runNodeIdentifier n
-    assertException expException $ withConnection host port $ do
+    assertException expException $ withConnectionWithAuth host port creds $ do
         deleteNode n
         removeLabel "mylabel" n
 
 -- | Get all nodes with a label
 case_allNodesWithLabel :: Assertion
-case_allNodesWithLabel = withConnection host port $ do
+case_allNodesWithLabel = withConnectionWithAuth host port creds $ do
         n1 <- createNode someProperties
         n2 <- createNode someProperties
         n3 <- createNode someProperties
@@ -848,7 +856,7 @@ case_allNodesWithLabel = withConnection host port $ do
 
 -- | Get all nodes with a label and a property
 case_allNodesWithLabelAndProperty :: Assertion
-case_allNodesWithLabelAndProperty = withConnection host port $ do
+case_allNodesWithLabelAndProperty = withConnectionWithAuth host port creds $ do
         n1 <- createNode someProperties
         n2 <- createNode someProperties
         n3 <- createNode anotherProperties
@@ -865,7 +873,7 @@ case_allNodesWithLabelAndProperty = withConnection host port $ do
 
 -- | Create, get and destroy index
 case_createGetDropIndex :: Assertion
-case_createGetDropIndex = withConnection host port $ do
+case_createGetDropIndex = withConnectionWithAuth host port creds $ do
         dropIndex lbl prop1
         dropIndex lbl prop2
         dropIndex lbl2 prop1
@@ -895,7 +903,7 @@ case_createGetDropIndex = withConnection host port $ do
 
 -- | Test batch, create a node and get it again
 case_batchCreateGetNode :: Assertion
-case_batchCreateGetNode = withConnection host port $ do
+case_batchCreateGetNode = withConnectionWithAuth host port creds $ do
                 g <- B.runBatch $ do
                         n <- B.createNode someProperties
                         B.getNode n
@@ -905,7 +913,7 @@ case_batchCreateGetNode = withConnection host port $ do
 
 -- | Test batch, create two nodes in a batch
 case_batchCreate2Nodes :: Assertion
-case_batchCreate2Nodes = withConnection host port $ do
+case_batchCreate2Nodes = withConnectionWithAuth host port creds $ do
                 g <- B.runBatch $ do
                         _ <- B.createNode someProperties
                         B.createNode anotherProperties
@@ -916,7 +924,7 @@ case_batchCreate2Nodes = withConnection host port $ do
 
 -- | Test batch, create and delete
 case_batchCreateDeleteNode :: Assertion
-case_batchCreateDeleteNode = withConnection host port $ do
+case_batchCreateDeleteNode = withConnectionWithAuth host port creds $ do
                 g <- B.runBatch $ do
                         n <- B.createNode someProperties
                         B.deleteNode n
@@ -924,7 +932,7 @@ case_batchCreateDeleteNode = withConnection host port $ do
 
 -- | Test batch, create two nodes and two relationships between them
 case_batchCreateRelationships :: Assertion
-case_batchCreateRelationships = withConnection host port $ do
+case_batchCreateRelationships = withConnectionWithAuth host port creds $ do
                 g <- B.runBatch $ do
                     n1 <- B.createNode someProperties
                     n2 <- B.createNode anotherProperties
@@ -946,7 +954,7 @@ case_batchCreateRelationships = withConnection host port $ do
 
 -- | Test batch, create and delete a relationship
 case_batchCreateDelRelationships :: Assertion
-case_batchCreateDelRelationships = withConnection host port $ do
+case_batchCreateDelRelationships = withConnectionWithAuth host port creds $ do
                 g <- B.runBatch $ do
                     n1 <- B.createNode someProperties
                     n2 <- B.createNode anotherProperties
@@ -959,7 +967,7 @@ case_batchCreateDelRelationships = withConnection host port $ do
 
 -- | Test batch getRelationshipFrom
 case_batchRelationshipNodeFrom :: Assertion
-case_batchRelationshipNodeFrom = withConnection host port $ do
+case_batchRelationshipNodeFrom = withConnectionWithAuth host port creds $ do
                 g <- B.runBatch $ do
                     n1 <- B.createNode someProperties
                     n2 <- B.createNode anotherProperties
@@ -975,7 +983,7 @@ case_batchRelationshipNodeFrom = withConnection host port $ do
 
 -- | Test batch getRelationshipTo
 case_batchRelationshipNodeTo :: Assertion
-case_batchRelationshipNodeTo = withConnection host port $ do
+case_batchRelationshipNodeTo = withConnectionWithAuth host port creds $ do
                 g <- B.runBatch $ do
                     n1 <- B.createNode someProperties
                     n2 <- B.createNode anotherProperties
@@ -991,7 +999,7 @@ case_batchRelationshipNodeTo = withConnection host port $ do
 
 -- | Test batch, get all relationships with filter
 case_batchGetRelationships :: Assertion
-case_batchGetRelationships = withConnection host port $ do
+case_batchGetRelationships = withConnectionWithAuth host port creds $ do
                 g <- B.runBatch $ do
                     n1 <- B.createNode someProperties
                     n2 <- B.createNode anotherProperties
@@ -1010,7 +1018,7 @@ case_batchGetRelationships = withConnection host port $ do
 
 -- | Test batch, set properties
 case_batchSetProperties :: Assertion
-case_batchSetProperties = withConnection host port $ do
+case_batchSetProperties = withConnectionWithAuth host port creds $ do
                 let newProperties = M.fromList ["croqueta" |: ("2" :: T.Text)]
                 g <- B.runBatch $ do
                     n1 <- B.createNode someProperties
@@ -1030,7 +1038,7 @@ case_batchSetProperties = withConnection host port $ do
 
 -- | Test batch, set property
 case_batchSetProperty :: Assertion
-case_batchSetProperty = withConnection host port $ do
+case_batchSetProperty = withConnectionWithAuth host port creds $ do
                 let key = "hola"
                 let val = newval False
                 let newSomeProperties = M.insert key val someProperties
@@ -1052,7 +1060,7 @@ case_batchSetProperty = withConnection host port $ do
 
 -- | Test batch, delete properties
 case_batchDeleteProperties :: Assertion
-case_batchDeleteProperties = withConnection host port $ do
+case_batchDeleteProperties = withConnectionWithAuth host port creds $ do
                 g <- B.runBatch $ do
                     n1 <- B.createNode someProperties
                     n2 <- B.createNode anotherProperties
@@ -1070,7 +1078,7 @@ case_batchDeleteProperties = withConnection host port $ do
 
 -- | Test batch, delete property
 case_batchDeleteProperty :: Assertion
-case_batchDeleteProperty= withConnection host port $ do
+case_batchDeleteProperty= withConnectionWithAuth host port creds $ do
                 let key = "mytext"
                 let newSomeProperties = M.delete key someProperties
                 g <- B.runBatch $ do
@@ -1091,18 +1099,18 @@ case_batchDeleteProperty= withConnection host port $ do
 -- | Test batch, delete an unknown property, it should raise an exception
 case_batchDeleteUnknownProperty :: Assertion
 case_batchDeleteUnknownProperty= do
-        n <- withConnection host port $ createNode someProperties
+        n <- withConnectionWithAuth host port creds $ createNode someProperties
         let excMsg = "Node[" <> TE.decodeUtf8 (nodeId n) <>"] does not have a property \"" <> prop <> "\""
         let expException = Neo4jNoSuchProperty excMsg
-        assertException expException $ withConnection host port $ do
+        assertException expException $ withConnectionWithAuth host port creds $ do
                     g <- B.runBatch $ B.deleteProperty n prop
                     neo4jEqual G.empty g -- Doing this to force evaluation
-        withConnection host port $ deleteNode n
+        withConnectionWithAuth host port creds $ deleteNode n
     where prop = "noprop" :: T.Text
 
 -- | Test batch, set add labels
 case_batchAddLabels :: Assertion
-case_batchAddLabels = withConnection host port $ do
+case_batchAddLabels = withConnectionWithAuth host port creds $ do
                 let label1 = "label1"
                 let label2 = "label2"
                 let label3 = "label3"
@@ -1120,7 +1128,7 @@ case_batchAddLabels = withConnection host port $ do
 
 -- | Test batch, change labels
 case_batchChangeLabels :: Assertion
-case_batchChangeLabels = withConnection host port $ do
+case_batchChangeLabels = withConnectionWithAuth host port creds $ do
                 let label1 = "label1"
                 let label2 = "label2"
                 let label3 = "label3"
@@ -1135,7 +1143,7 @@ case_batchChangeLabels = withConnection host port $ do
 
 -- | Test batch, remove label
 case_batchRemoveLabel :: Assertion
-case_batchRemoveLabel = withConnection host port $ do
+case_batchRemoveLabel = withConnectionWithAuth host port creds $ do
                 let label1 = "label1"
                 let label2 = "label2"
                 let label3 = "label3"
@@ -1150,7 +1158,7 @@ case_batchRemoveLabel = withConnection host port $ do
 
 -- | Test batch, get all nodes with a label
 case_batchAllNodesWithLabel :: Assertion
-case_batchAllNodesWithLabel = withConnection host port $ do
+case_batchAllNodesWithLabel = withConnectionWithAuth host port creds $ do
         gp <- B.runBatch $ do
             n1 <- B.createNode someProperties
             n2 <- B.createNode someProperties
@@ -1170,7 +1178,7 @@ case_batchAllNodesWithLabel = withConnection host port $ do
 
 -- | Test batch, get all nodes with a label and a property
 case_batchAllNodesWithLabelAndProperty :: Assertion
-case_batchAllNodesWithLabelAndProperty = withConnection host port $ do
+case_batchAllNodesWithLabelAndProperty = withConnectionWithAuth host port creds $ do
         gp <- B.runBatch $ do
             n1 <- B.createNode someProperties
             n2 <- B.createNode someProperties
@@ -1190,7 +1198,7 @@ case_batchAllNodesWithLabelAndProperty = withConnection host port $ do
 
 -- | Test cypher basic test
 case_cypherBasic :: Assertion
-case_cypherBasic = withConnection host port $ do
+case_cypherBasic = withConnectionWithAuth host port creds $ do
         -- create initial data
         gp <- B.runBatch $ do
             n1 <- B.createNode $ M.fromList ["name" |: ("I" :: T.Text)]
@@ -1211,7 +1219,7 @@ case_cypherBasic = withConnection host port $ do
 
 -- | Test cypher create a node
 case_cypherCreateNode :: Assertion
-case_cypherCreateNode = withConnection host port $ do
+case_cypherCreateNode = withConnectionWithAuth host port creds $ do
         res <- C.cypher query params
         neo4jBool $ C.isSuccess res
         let gp = G.addCypher (C.fromSuccess res) G.empty
@@ -1226,7 +1234,7 @@ case_cypherCreateNode = withConnection host port $ do
 
 -- | Test cypher create a node with multiple properties
 case_cypherCreateNodeMultipleProperties :: Assertion
-case_cypherCreateNodeMultipleProperties = withConnection host port $ do
+case_cypherCreateNodeMultipleProperties = withConnectionWithAuth host port creds $ do
         res <- C.cypher query params
         neo4jBool $ C.isSuccess res
         let gp = G.addCypher (C.fromSuccess res) G.empty
@@ -1242,7 +1250,7 @@ case_cypherCreateNodeMultipleProperties = withConnection host port $ do
 
 -- | Test cypher create multiple nodes
 case_cypherCreateMultipleNodes :: Assertion
-case_cypherCreateMultipleNodes = withConnection host port $ do
+case_cypherCreateMultipleNodes = withConnectionWithAuth host port creds $ do
         res <- C.cypher query params
         neo4jBool $ C.isSuccess res
         let gp = G.addCypher (C.fromSuccess res) G.empty
@@ -1259,7 +1267,7 @@ case_cypherCreateMultipleNodes = withConnection host port $ do
 
 -- | Test cypher set all properties on a node
 case_cypherSetAllNodeProperties :: Assertion
-case_cypherSetAllNodeProperties = withConnection host port $ do
+case_cypherSetAllNodeProperties = withConnectionWithAuth host port creds $ do
         res <- C.cypher query params
         neo4jBool $ C.isSuccess res
         let gp = G.addCypher (C.fromSuccess res) G.empty
@@ -1275,7 +1283,7 @@ case_cypherSetAllNodeProperties = withConnection host port $ do
 
 -- | Test cypher basic query
 case_cypherBasicQuery :: Assertion
-case_cypherBasicQuery = withConnection host port $ do
+case_cypherBasicQuery = withConnectionWithAuth host port creds $ do
         -- create initial data
         gp <- B.runBatch $ do
             n1 <- B.createNode $ M.fromList ["name" |: ("I" :: T.Text)]
@@ -1298,7 +1306,7 @@ case_cypherBasicQuery = withConnection host port $ do
 
 -- | Test cypher basic query get relationships
 case_cypherBasicQueryGetRels :: Assertion
-case_cypherBasicQueryGetRels = withConnection host port $ do
+case_cypherBasicQueryGetRels = withConnectionWithAuth host port creds $ do
         -- create initial data
         gp <- B.runBatch $ do
             n1 <- B.createNode $ M.fromList ["name" |: ("I" :: T.Text)]
@@ -1322,7 +1330,7 @@ case_cypherBasicQueryGetRels = withConnection host port $ do
 
 -- | Test cypher nested results
 case_cypherNestedResults :: Assertion
-case_cypherNestedResults = withConnection host port $ do
+case_cypherNestedResults = withConnectionWithAuth host port creds $ do
         -- create initial data
         gp <- B.runBatch $ do
             n1 <- B.createNode $ M.fromList ["name" |: ("I" :: T.Text)]
@@ -1346,7 +1354,7 @@ case_cypherNestedResults = withConnection host port $ do
 
 -- | Test cypher errors
 case_cypherError :: Assertion
-case_cypherError = withConnection host port $ do
+case_cypherError = withConnectionWithAuth host port creds $ do
         -- create initial data
         gp <- B.runBatch $ do
             B.createNode $ M.fromList ["age" |: (26 :: Int64)]
@@ -1361,7 +1369,7 @@ case_cypherError = withConnection host port $ do
 
 -- | Test lone transaction cypher basic query
 case_loneTransactionBasicQuery :: Assertion
-case_loneTransactionBasicQuery = withConnection host port $ do
+case_loneTransactionBasicQuery = withConnectionWithAuth host port creds $ do
         -- create initial data
         gp <- B.runBatch $ do
             n1 <- B.createNode $ M.fromList ["name" |: ("I" :: T.Text)]
@@ -1385,7 +1393,7 @@ case_loneTransactionBasicQuery = withConnection host port $ do
 
 -- | Test cypher errors in a transaction
 case_cypherTransactionError :: Assertion
-case_cypherTransactionError = withConnection host port $ do
+case_cypherTransactionError = withConnectionWithAuth host port creds $ do
         -- create initial data
         gp <- B.runBatch $ B.createNode $ M.fromList ["age" |: (26 :: Int64)]
         -- actual test
@@ -1399,7 +1407,7 @@ case_cypherTransactionError = withConnection host port $ do
 
 -- | Test a cypher transaction
 case_cypherTransaction :: Assertion
-case_cypherTransaction = withConnection host port $ do
+case_cypherTransaction = withConnectionWithAuth host port creds $ do
         res <- TC.runTransaction $ do
             result <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
                               \CREATE p1 = (pere)-[:KNOWS]->(pau) RETURN pere, pau, p1, pere.age" $
@@ -1424,7 +1432,7 @@ case_cypherTransaction = withConnection host port $ do
 
 -- | Test a cypher transaction with a explicit commit
 case_cypherTransactionExplicitCommit :: Assertion
-case_cypherTransactionExplicitCommit = withConnection host port $ do
+case_cypherTransactionExplicitCommit = withConnectionWithAuth host port creds $ do
         res <- TC.runTransaction $ do
             result <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
                               \CREATE p1 = (pere)-[:KNOWS]->(pau) RETURN pere, pau, p1, pere.age" $
@@ -1451,7 +1459,7 @@ case_cypherTransactionExplicitCommit = withConnection host port $ do
 
 -- | Test a cypher transaction with a keepalive
 case_cypherTransactionKeepAlive :: Assertion
-case_cypherTransactionKeepAlive = withConnection host port $ do
+case_cypherTransactionKeepAlive = withConnectionWithAuth host port creds $ do
         res <- TC.runTransaction $ do
             TC.keepalive
             void $ TC.cypher "CREATE (pep: PERSON {age: 55})" M.empty
@@ -1479,7 +1487,7 @@ case_cypherTransactionKeepAlive = withConnection host port $ do
 
 -- | Test a cypher transaction with an error
 case_cypherErrorInTransaction :: Assertion
-case_cypherErrorInTransaction = withConnection host port $ do
+case_cypherErrorInTransaction = withConnectionWithAuth host port creds $ do
         res <- TC.runTransaction $ do
             -- query with wrong syntax
             void $ TC.cypher "i" M.empty
@@ -1494,7 +1502,7 @@ case_cypherErrorInTransaction = withConnection host port $ do
 
 -- | Test a cypher rollback transaction
 case_cypherTransactionRollback :: Assertion
-case_cypherTransactionRollback = withConnection host port $ do
+case_cypherTransactionRollback = withConnectionWithAuth host port creds $ do
          void $ TC.runTransaction $ do
             void $ TC.cypher "CREATE (pepe: PERSON {age: 55})" M.empty
             result <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
@@ -1506,7 +1514,7 @@ case_cypherTransactionRollback = withConnection host port $ do
 
 -- | Test a cypher rollback and leave transaction
 case_cypherTransactionRollbackAndLeave :: Assertion
-case_cypherTransactionRollbackAndLeave = withConnection host port $ do
+case_cypherTransactionRollbackAndLeave = withConnectionWithAuth host port creds $ do
          res <- TC.runTransaction $ do
             void $ TC.cypher "CREATE (pepe: PERSON {age: 55})" M.empty
             result <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
@@ -1521,7 +1529,7 @@ case_cypherTransactionRollbackAndLeave = withConnection host port $ do
 
 -- | Test issuing a commits after a rollback
 case_cypherTransactionEnded :: Assertion
-case_cypherTransactionEnded = assertException expException $ withConnection host port $ do
+case_cypherTransactionEnded = assertException expException $ withConnectionWithAuth host port creds $ do
      void $ TC.runTransaction $ do
             void $ TC.cypher "CREATE (pepe: PERSON {age: 55})" M.empty
             result <- TC.cypher "CREATE (pere: PERSON {age: {age}}) CREATE (pau: PERSON {props}) \
@@ -1535,7 +1543,7 @@ case_cypherTransactionEnded = assertException expException $ withConnection host
 
 -- | Test graph union op
 case_graphUnion :: Assertion
-case_graphUnion = withConnection host port $ do
+case_graphUnion = withConnectionWithAuth host port creds $ do
                 g <- B.runBatch $ do
                     n1 <- B.createNode someProperties
                     n2 <- B.createNode anotherProperties
@@ -1564,7 +1572,7 @@ case_graphUnion = withConnection host port $ do
 
 -- | Test graph difference op
 case_graphDifference :: Assertion
-case_graphDifference = withConnection host port $ do
+case_graphDifference = withConnectionWithAuth host port creds $ do
                 g <- B.runBatch $ do
                     n1 <- B.createNode someProperties
                     n2 <- B.createNode anotherProperties
@@ -1581,7 +1589,7 @@ case_graphDifference = withConnection host port $ do
 
 -- | Test graph intersection op
 case_graphIntersection :: Assertion
-case_graphIntersection = withConnection host port $ do
+case_graphIntersection = withConnectionWithAuth host port creds $ do
                 g <- B.runBatch $ do
                     n1 <- B.createNode someProperties
                     n2 <- B.createNode anotherProperties
@@ -1629,19 +1637,19 @@ cleanUpTraversalTest g = void $ B.runBatch $ do
 -- | Test a traversal with an unexisting start
 case_traversalNotFound :: Assertion
 case_traversalNotFound = do
-        g <- withConnection host port $ setUpTraversalTest
+        g <- withConnectionWithAuth host port creds $ setUpTraversalTest
         let start = fromJust $ G.getNamedNode "Root" g
         let expException = Neo4jNoEntityException $ (TE.encodeUtf8 . runNodePath . nodePath) start
-        assertException expException $ withConnection host port $ do
+        assertException expException $ withConnectionWithAuth host port creds $ do
             let rels = map (\n -> fromJust $ G.getNamedRelationship n g) ["Root-Johan", "Root-Mattias"]
             mapM_ deleteRelationship rels
             deleteNode start
             void $ T.traverseGetNodes def start
-        withConnection host port $ cleanUpTraversalTest g
+        withConnectionWithAuth host port creds $ cleanUpTraversalTest g
 
 -- | Test a default traversal returning nodes
 case_defaultTraversalNodes :: Assertion
-case_defaultTraversalNodes = withConnection host port $ do
+case_defaultTraversalNodes = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Root" g
     ns <- T.traverseGetNodes def start
@@ -1651,7 +1659,7 @@ case_defaultTraversalNodes = withConnection host port $ do
 
 -- | Test a default traversal returning relationships
 case_defaultTraversalRels :: Assertion
-case_defaultTraversalRels = withConnection host port $ do
+case_defaultTraversalRels = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Root" g
     rs <- T.traverseGetRels def start
@@ -1661,7 +1669,7 @@ case_defaultTraversalRels = withConnection host port $ do
 
 -- | Test a default traversal returning id paths
 case_defaultTraversalIdPath :: Assertion
-case_defaultTraversalIdPath = withConnection host port $ do
+case_defaultTraversalIdPath = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Root" g
     ps <- L.sort <$> T.traverseGetPath def start
@@ -1681,7 +1689,7 @@ case_defaultTraversalIdPath = withConnection host port $ do
 
 -- | Test a default traversal returning full paths
 case_defaultTraversalFullPath :: Assertion
-case_defaultTraversalFullPath = withConnection host port $ do
+case_defaultTraversalFullPath = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Root" g
     ps <- L.sort <$> T.traverseGetFullPath def start
@@ -1706,19 +1714,19 @@ case_defaultTraversalFullPath = withConnection host port $ do
 -- | Test a traversal with an unexisting start
 case_pagedTraversalNotFound :: Assertion
 case_pagedTraversalNotFound = do
-        g <- withConnection host port $ setUpTraversalTest
+        g <- withConnectionWithAuth host port creds $ setUpTraversalTest
         let start = fromJust $ G.getNamedNode "Root" g
         let expException = Neo4jNoEntityException $ (TE.encodeUtf8 . runNodePath . nodePath) start
-        assertException expException $ withConnection host port $ do
+        assertException expException $ withConnectionWithAuth host port creds $ do
             let rels = map (\n -> fromJust $ G.getNamedRelationship n g) ["Root-Johan", "Root-Mattias"]
             mapM_ deleteRelationship rels
             deleteNode start
             void $ T.pagedTraverseGetNodes def def start
-        withConnection host port $ cleanUpTraversalTest g
+        withConnectionWithAuth host port creds $ cleanUpTraversalTest g
 
 -- | Test a paged traversal returning nodes
 case_pagedTraversalNodes :: Assertion
-case_pagedTraversalNodes = withConnection host port $ do
+case_pagedTraversalNodes = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Root" g
     let desc = def {T.travDepth = Left 2}
@@ -1743,7 +1751,7 @@ case_pagedTraversalNodes = withConnection host port $ do
 
 -- | Test a paged traversal returning relationships
 case_pagedTraversalRels :: Assertion
-case_pagedTraversalRels = withConnection host port $ do
+case_pagedTraversalRels = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Root" g
     let desc = def
@@ -1763,7 +1771,7 @@ case_pagedTraversalRels = withConnection host port $ do
 
 -- | Test a paged traversal returning id paths 
 case_pagedTraversalIdPaths :: Assertion
-case_pagedTraversalIdPaths = withConnection host port $ do
+case_pagedTraversalIdPaths = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Root" g
     let desc = def
@@ -1791,7 +1799,7 @@ case_pagedTraversalIdPaths = withConnection host port $ do
 
 -- | Test a paged traversal returning full paths 
 case_pagedTraversalFullPaths :: Assertion
-case_pagedTraversalFullPaths = withConnection host port $ do
+case_pagedTraversalFullPaths = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Root" g
     let desc = def
@@ -1817,7 +1825,7 @@ case_pagedTraversalFullPaths = withConnection host port $ do
 
 -- | Test traversal depth first search
 case_dfsTraversalNodes :: Assertion
-case_dfsTraversalNodes = withConnection host port $ do
+case_dfsTraversalNodes = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Root" g
     let desc = def {T.travDepth = Left 2, T.travOrder = T.DepthFirst}
@@ -1828,7 +1836,7 @@ case_dfsTraversalNodes = withConnection host port $ do
 
 -- | Test traversal with a relation filter
 case_relFilterTraversalNodes :: Assertion
-case_relFilterTraversalNodes = withConnection host port $ do
+case_relFilterTraversalNodes = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Tobias" g
     let desc = def {T.travRelFilter = [("loves", Outgoing)]}
@@ -1855,7 +1863,7 @@ case_relFilterTraversalNodes = withConnection host port $ do
 
 -- | Test traversal with a uniqueness constraint
 case_uniquenessTraversalNodes :: Assertion
-case_uniquenessTraversalNodes = withConnection host port $ do
+case_uniquenessTraversalNodes = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Tobias" g
     let desc = def {T.travDepth = Left 2, T.travRelFilter = [("loves", Any), ("hates", Any), ("admires", Any)]}
@@ -1882,7 +1890,7 @@ case_uniquenessTraversalNodes = withConnection host port $ do
 
 -- | Test traversal with a javascript depth expression
 case_progDepthTraversalNodes :: Assertion
-case_progDepthTraversalNodes = withConnection host port $ do
+case_progDepthTraversalNodes = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Root" g
     let desc = def {T.travDepth = Right "position.length() >= 2;"}
@@ -1894,17 +1902,17 @@ case_progDepthTraversalNodes = withConnection host port $ do
 -- | Test traversal with a wrong javascript depth expression
 case_wrongProgDepthTraversalNodes :: Assertion
 case_wrongProgDepthTraversalNodes = do
-        g <- withConnection host port $ setUpTraversalTest
-        assertException expException $ withConnection host port $ do
+        g <- withConnectionWithAuth host port creds $ setUpTraversalTest
+        assertException expException $ withConnectionWithAuth host port creds $ do
             let start = fromJust $ G.getNamedNode "Root" g
             let desc = def {T.travDepth = Right "positionlength() >= 2;"}
             void $ T.traverseGetNodes desc start
-        withConnection host port $ cleanUpTraversalTest g
+        withConnectionWithAuth host port creds $ cleanUpTraversalTest g
       where expException = Neo4jUnexpectedResponseException HT.status400
 
 -- | Test traversal without initial node
 case_returnButFirstTraversal :: Assertion
-case_returnButFirstTraversal = withConnection host port $ do
+case_returnButFirstTraversal = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Root" g
     let desc = def {T.travNodeFilter = Left T.ReturnAllButStartNode}
@@ -1915,7 +1923,7 @@ case_returnButFirstTraversal = withConnection host port $ do
 
 -- | Test filter nodes without initial node
 case_filterNodesTraversal :: Assertion
-case_filterNodesTraversal = withConnection host port $ do
+case_filterNodesTraversal = withConnectionWithAuth host port creds $ do
     g <- setUpTraversalTest
     let start = fromJust $ G.getNamedNode "Root" g
     let desc = def {T.travNodeFilter = Right "position.endNode().getProperty('name').toLowerCase().contains('t');"}
@@ -1927,10 +1935,10 @@ case_filterNodesTraversal = withConnection host port $ do
 -- | Test traversal with a filter expression
 case_wrongFilterNodesTraversal :: Assertion
 case_wrongFilterNodesTraversal = do
-        g <- withConnection host port $ setUpTraversalTest
-        assertException expException $ withConnection host port $ do
+        g <- withConnectionWithAuth host port creds $ setUpTraversalTest
+        assertException expException $ withConnectionWithAuth host port creds $ do
             let start = fromJust $ G.getNamedNode "Root" g
             let desc = def {T.travNodeFilter = Right "posiiiitionlength() >= 2;"}
             void $ T.traverseGetNodes desc start
-        withConnection host port $ cleanUpTraversalTest g
+        withConnectionWithAuth host port creds $ cleanUpTraversalTest g
       where expException = Neo4jUnexpectedResponseException HT.status400
