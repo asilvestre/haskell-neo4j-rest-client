@@ -16,7 +16,7 @@ module Database.Neo4j (
     -- $use
 
     -- * Connection handling objects
-    Connection, Hostname, Port, newConnection, withConnection,
+    Connection, Hostname, Port, Credentials, newConnection, withConnection, newConnectionWithAuth, withConnectionWithAuth,
     -- * Main monadic type to handle sequences of commands to Neo4j
     Neo4j(..),
     -- * Constructing and managing node/relationship properties
