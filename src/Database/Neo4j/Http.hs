@@ -29,8 +29,8 @@ newConnection hostname port = do
         return $ Connection hostname port mgr Nothing
 
 -- | Create a new connection that can be manually closed with runResourceT using provided credentials for basic auth
-newConnectionWithAuth :: Hostname -> Port -> Credentials -> IO Connection
-newConnectionWithAuth hostname port creds = do
+newAuthConnection :: Hostname -> Port -> Credentials -> IO Connection
+newAuthConnection hostname port creds = do
         mgr <- HC.newManager defaultManagerSettings
         return $ Connection hostname port mgr (Just creds)
 
@@ -42,8 +42,8 @@ withConnection hostname port cmds = runResourceT $ do
          liftIO $ runNeo4j cmds conn
 
 -- | Run a set of Neo4j commands in a single connection using provided credentials for basic auth
-withConnectionWithAuth :: Hostname -> Port -> Credentials -> Neo4j a -> IO a
-withConnectionWithAuth hostname port creds cmds = runResourceT $ do
+withAuthConnection :: Hostname -> Port -> Credentials -> Neo4j a -> IO a
+withAuthConnection hostname port creds cmds = runResourceT $ do
          mgr <- liftIO $ HC.newManager defaultManagerSettings
          let conn = Connection hostname port mgr (Just creds)
          liftIO $ runNeo4j cmds conn
