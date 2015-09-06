@@ -52,7 +52,7 @@ withAuthConnection hostname port creds cmds = runResourceT $ do
 httpReq :: Connection -> HT.Method -> S.ByteString -> L.ByteString -> (HT.Status -> Bool) ->
      IO (HC.Response L.ByteString)
 -- No credentials provided
-httpReq (Connection h p m Nothing) method path body statusCheck = do
+httpReq (Connection h p m c) method path body statusCheck = do
             let request = def {
                     HC.host = h,
                     HC.port = p,
@@ -66,11 +66,14 @@ httpReq (Connection h p m Nothing) method path body statusCheck = do
                                           (HT.hContentType, "application/json")]}
             -- TODO: Would be better to use exceptions package Control.Monad.Catch ??
             -- Wrapping up HTTP-Conduit exceptions in our own
-            liftIO $ HC.httpLbs request m `catch` wrapException
+            liftIO $ case c of 
+                Nothing -> HC.httpLbs request m `catch` wrapException
+                Just creds -> HC.httpLbs (HC.applyBasicAuth (getUsername creds) (getPassword creds) request) m `catch` wrapException
     where wrapException :: HC.HttpException -> a
           wrapException = throw . Neo4jHttpException . show
           
 --Credentials provided
+{-
 httpReq (Connection h p m (Just c)) method path body statusCheck = do
             let request = def {
                     HC.host = h,
@@ -87,7 +90,8 @@ httpReq (Connection h p m (Just c)) method path body statusCheck = do
             -- Wrapping up HTTP-Conduit exceptions in our own
             liftIO $ HC.httpLbs (HC.applyBasicAuth (fst c) (snd c) request) m `catch` wrapException
     where wrapException :: HC.HttpException -> a
-          wrapException = throw . Neo4jHttpException . show          
+          wrapException = throw . Neo4jHttpException . show   
+-}       
 
 -- | Extracts the exception description from a HTTP Neo4j response if the status code matches otherwise Nothing
 extractException :: HC.Response L.ByteString -> T.Text
