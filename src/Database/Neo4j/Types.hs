@@ -331,6 +331,13 @@ type Credentials = (Username, Password)
 type Username = S.ByteString
 type Password = S.ByteString
 
+getUsername :: Credentials -> S.ByteString
+getUsername = fst
+
+getPassword :: Credentials -> S.ByteString
+getPassword = snd
+
+
 -- | Neo4j monadic type to be able to sequence neo4j commands in a connection
 newtype Neo4j a = Neo4j { runNeo4j :: Connection -> IO a }
 
