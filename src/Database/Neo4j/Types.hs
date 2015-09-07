@@ -378,7 +378,12 @@ instance MonadBase (Neo4j) (Neo4j) where
 --    restoreM (StNeo4j x) = Neo4j $ const $ restoreM x
 
 instance J.FromJSON Version where
+    parseJSON (J.Object v) = v .: "neo4j_version" >>= (\s -> return $ fst . last $ readP_to_S parseVersion s)
+    parseJSON _ = mzero
+
+{- makeVersion was introduced in base 4.8.0.0
+instance J.FromJSON Version where
    parseJSON (J.Object v) = makeVersion <$> ver
        where ver = v .: "neo4j_version" >>= (\s -> return $ versionBranch $ fst . last $ readP_to_S parseVersion s)
    parseJSON _ = mzero
-   
+-}    
