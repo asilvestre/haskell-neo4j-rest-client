@@ -103,7 +103,12 @@ case_NoConnection = assertException expException $ withConnection "localhost" 77
 
 -- | Test connecting to a server with improper credentials
 case_ImproperCredentials :: Assertion
-case_ImproperCredentials = assertException expException $ withConnection host port $ createNode someProperties
+case_ImproperCredentials = do
+    mExp <- getException $ withConnection host port $ createNode someProperties
+    case mExp of
+        Nothing -> return () -- Old Neo4j version or auth disabled, no need to test this
+        Just _ -> assertException expException (
+            withAuthConnection host port ("fake", "pass") $ createNode someProperties)
     where expException = Neo4jUnexpectedResponseException HT.status401
 
 -- | Test get and create a node
