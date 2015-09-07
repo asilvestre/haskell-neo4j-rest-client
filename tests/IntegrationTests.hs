@@ -111,6 +111,11 @@ case_ImproperCredentials = do
             withAuthConnection host port ("fake", "pass") $ createNode someProperties)
     where expException = Neo4jUnexpectedResponseException HT.status401
 
+-- | Test getDatabaseVersion
+case_getDatabaseVersion :: Assertion
+case_getDatabaseVersion = do 
+    withAuthConnection host port creds $ getDatabaseVersion >> return ()
+
 -- | Test get and create a node
 case_CreateGetDeleteNode :: Assertion
 case_CreateGetDeleteNode = withAuthConnection host port creds $ do
