@@ -14,6 +14,7 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid, mappend)
 import Data.String (fromString)
 import Data.Typeable (Typeable)
+import Data.Version
 import Control.Exception (throw)
 import Control.Exception.Base (Exception)
 import Control.Applicative
@@ -22,6 +23,7 @@ import Control.Monad.Base (MonadBase, liftBase)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 --import Control.Monad.Trans.Control (MonadBaseControl, liftBaseWith, restoreM, StM)
 import Control.Monad.Trans.Resource (MonadThrow, throwM)
+import Text.ParserCombinators.ReadP
 import GHC.Generics (Generic)
 
 import Data.Aeson ((.:))
@@ -374,3 +376,9 @@ instance MonadBase (Neo4j) (Neo4j) where
 --         liftBaseWith $ \runInBase ->
 --             f $ liftM StNeo4j . runInBase . (\(Neo4j r) -> r conn)
 --    restoreM (StNeo4j x) = Neo4j $ const $ restoreM x
+
+instance J.FromJSON Version where
+   parseJSON (J.Object v) = makeVersion <$> ver
+       where ver = v .: "neo4j_version" >>= (\s -> return $ versionBranch $ fst . last $ readP_to_S parseVersion s)
+   parseJSON _ = mzero
+   

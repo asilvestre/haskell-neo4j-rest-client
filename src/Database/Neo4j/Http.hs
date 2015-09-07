@@ -13,6 +13,8 @@ import Data.Aeson.Types (parseMaybe)
 
 import Network.HTTP.Client (defaultManagerSettings)
 
+import Text.ParserCombinators.ReadP
+
 import qualified Data.Aeson as J
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
@@ -51,7 +53,6 @@ withAuthConnection hostname port creds cmds = runResourceT $ do
 -- | General function for HTTP requests
 httpReq :: Connection -> HT.Method -> S.ByteString -> L.ByteString -> (HT.Status -> Bool) ->
      IO (HC.Response L.ByteString)
--- No credentials provided
 httpReq (Connection h p m c) method path body statusCheck = do
             let request = def {
                     HC.host = h,
@@ -71,28 +72,7 @@ httpReq (Connection h p m c) method path body statusCheck = do
                 Just creds -> HC.httpLbs (HC.applyBasicAuth (getUsername creds) (getPassword creds) request) m `catch` wrapException
     where wrapException :: HC.HttpException -> a
           wrapException = throw . Neo4jHttpException . show
-          
---Credentials provided
-{-
-httpReq (Connection h p m (Just c)) method path body statusCheck = do
-            let request = def {
-                    HC.host = h,
-                    HC.port = p,
-                    HC.path = path,
-                    HC.method = method,
-                    HC.requestBody = HC.RequestBodyLBS body,
-                    HC.checkStatus = \s _ _ -> if statusCheck s
-                                                 then Nothing
-                                                 else Just (toException $ Neo4jUnexpectedResponseException s),
-                    HC.requestHeaders = [(HT.hAccept, "application/json; charset=UTF-8"),
-                                          (HT.hContentType, "application/json")]}
-            -- TODO: Would be better to use exceptions package Control.Monad.Catch ??
-            -- Wrapping up HTTP-Conduit exceptions in our own
-            liftIO $ HC.httpLbs (HC.applyBasicAuth (fst c) (snd c) request) m `catch` wrapException
-    where wrapException :: HC.HttpException -> a
-          wrapException = throw . Neo4jHttpException . show   
--}       
-
+    
 -- | Extracts the exception description from a HTTP Neo4j response if the status code matches otherwise Nothing
 extractException :: HC.Response L.ByteString -> T.Text
 extractException resp = fromMaybe "" $ do
