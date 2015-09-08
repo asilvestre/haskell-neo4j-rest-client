@@ -14,6 +14,7 @@ import Data.Maybe (fromMaybe)
 import Data.Monoid (Monoid, mappend)
 import Data.String (fromString)
 import Data.Typeable (Typeable)
+import Data.Version
 import Control.Exception (throw)
 import Control.Exception.Base (Exception)
 import Control.Applicative
@@ -22,6 +23,7 @@ import Control.Monad.Base (MonadBase, liftBase)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 --import Control.Monad.Trans.Control (MonadBaseControl, liftBaseWith, restoreM, StM)
 import Control.Monad.Trans.Resource (MonadThrow, throwM)
+import Text.ParserCombinators.ReadP
 import GHC.Generics (Generic)
 
 import Data.Aeson ((.:))
@@ -318,10 +320,25 @@ data Neo4jException = Neo4jHttpException String |
 instance Exception Neo4jException
 
 -- | Type for a connection
-data Connection = Connection {dbHostname :: Hostname, dbPort :: Port, manager :: HC.Manager}
+data Connection = Connection {dbHostname :: Hostname
+                             ,dbPort :: Port
+                             ,manager :: HC.Manager
+                             ,dbCredentials :: Maybe Credentials
+                             }
 
 type Hostname = S.ByteString
 type Port = Int
+
+type Credentials = (Username, Password)
+type Username = S.ByteString
+type Password = S.ByteString
+
+getUsername :: Credentials -> S.ByteString
+getUsername = fst
+
+getPassword :: Credentials -> S.ByteString
+getPassword = snd
+
 
 -- | Neo4j monadic type to be able to sequence neo4j commands in a connection
 newtype Neo4j a = Neo4j { runNeo4j :: Connection -> IO a }
@@ -359,3 +376,8 @@ instance MonadBase (Neo4j) (Neo4j) where
 --         liftBaseWith $ \runInBase ->
 --             f $ liftM StNeo4j . runInBase . (\(Neo4j r) -> r conn)
 --    restoreM (StNeo4j x) = Neo4j $ const $ restoreM x
+
+instance J.FromJSON Version where
+    parseJSON (J.Object v) = v .: "neo4j_version" >>= (\s -> return $ fst . last $ readP_to_S parseVersion s)
+    parseJSON _ = mzero
+

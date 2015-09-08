@@ -11,6 +11,10 @@ import Data.Maybe (fromMaybe)
 import Data.Aeson ((.:))
 import Data.Aeson.Types (parseMaybe)
 
+import Network.HTTP.Client (defaultManagerSettings)
+
+import Text.ParserCombinators.ReadP
+
 import qualified Data.Aeson as J
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
@@ -20,22 +24,36 @@ import qualified Network.HTTP.Types as HT
 
 import Database.Neo4j.Types
 
-
 -- | Create a new connection that can be manually closed with runResourceT
 newConnection :: Hostname -> Port -> IO Connection
 newConnection hostname port = do
-        mgr <- HC.newManager HC.conduitManagerSettings
-        return $ Connection hostname port mgr
+        mgr <- HC.newManager defaultManagerSettings
+        return $ Connection hostname port mgr Nothing
+
+-- | Create a new connection that can be manually closed with runResourceT using provided credentials for basic auth
+newAuthConnection :: Hostname -> Port -> Credentials -> IO Connection
+newAuthConnection hostname port creds = do
+        mgr <- HC.newManager defaultManagerSettings
+        return $ Connection hostname port mgr (Just creds)
 
 -- | Run a set of Neo4j commands in a single connection
-withConnection :: Hostname -> Port -> Neo4j a -> IO a 
-withConnection hostname port cmds = runResourceT $ HC.withManager $
-         \mgr -> liftIO $ runNeo4j cmds $ Connection hostname port mgr
-        
+withConnection :: Hostname -> Port -> Neo4j a -> IO a
+withConnection hostname port cmds = runResourceT $ do
+         mgr <- liftIO $ HC.newManager defaultManagerSettings
+         let conn = Connection hostname port mgr Nothing
+         liftIO $ runNeo4j cmds conn
+
+-- | Run a set of Neo4j commands in a single connection using provided credentials for basic auth
+withAuthConnection :: Hostname -> Port -> Credentials -> Neo4j a -> IO a
+withAuthConnection hostname port creds cmds = runResourceT $ do
+         mgr <- liftIO $ HC.newManager defaultManagerSettings
+         let conn = Connection hostname port mgr (Just creds)
+         liftIO $ runNeo4j cmds conn
+       
 -- | General function for HTTP requests
 httpReq :: Connection -> HT.Method -> S.ByteString -> L.ByteString -> (HT.Status -> Bool) ->
      IO (HC.Response L.ByteString)
-httpReq (Connection h p m) method path body statusCheck = do
+httpReq (Connection h p m c) method path body statusCheck = do
             let request = def {
                     HC.host = h,
                     HC.port = p,
@@ -49,10 +67,12 @@ httpReq (Connection h p m) method path body statusCheck = do
                                           (HT.hContentType, "application/json")]}
             -- TODO: Would be better to use exceptions package Control.Monad.Catch ??
             -- Wrapping up HTTP-Conduit exceptions in our own
-            liftIO $ HC.httpLbs request m `catch` wrapException
+            liftIO $ case c of 
+                Nothing -> HC.httpLbs request m `catch` wrapException
+                Just creds -> HC.httpLbs (HC.applyBasicAuth (getUsername creds) (getPassword creds) request) m `catch` wrapException
     where wrapException :: HC.HttpException -> a
           wrapException = throw . Neo4jHttpException . show
-
+    
 -- | Extracts the exception description from a HTTP Neo4j response if the status code matches otherwise Nothing
 extractException :: HC.Response L.ByteString -> T.Text
 extractException resp = fromMaybe "" $ do

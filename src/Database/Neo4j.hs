@@ -16,7 +16,7 @@ module Database.Neo4j (
     -- $use
 
     -- * Connection handling objects
-    Connection, Hostname, Port, newConnection, withConnection,
+    Connection, Hostname, Port, Credentials, newConnection, withConnection, newAuthConnection, withAuthConnection,
     -- * Main monadic type to handle sequences of commands to Neo4j
     Neo4j(..),
     -- * Constructing and managing node/relationship properties
@@ -35,16 +35,19 @@ module Database.Neo4j (
     -- * Indexes
     Index(..), createIndex, getIndexes, dropIndex,
     -- * Exceptions
-    Neo4jException(..)
+    Neo4jException(..),
+    -- * Database version information
+    getDatabaseVersion,
     ) where
 
-import Database.Neo4j.Index
 import Database.Neo4j.Http
+import Database.Neo4j.Index
 import Database.Neo4j.Label
 import Database.Neo4j.Node
-import Database.Neo4j.Relationship
 import Database.Neo4j.Property
+import Database.Neo4j.Relationship
 import Database.Neo4j.Types
+import Database.Neo4j.Version
 
 -- $use
 --
