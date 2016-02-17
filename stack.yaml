@@ -1,6 +1,5 @@
 flags: {}
 packages:
 - '.'
-resolver: nightly-2016-02-10
-extra-deps:
-    - aeson-0.11.0.0
+extra-deps: []
+resolver: lts-3.1
