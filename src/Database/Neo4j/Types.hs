@@ -38,6 +38,9 @@ import qualified Data.Vector as V
 import qualified Network.HTTP.Conduit as HC
 import qualified Network.HTTP.Types as HT
 
+
+newtype Neo4jVersion = Neo4jVersion {runVersion :: Version}
+
 (<>) :: (Monoid a) => a -> a -> a
 (<>) = mappend
 
@@ -377,7 +380,7 @@ instance MonadBase (Neo4j) (Neo4j) where
 --             f $ liftM StNeo4j . runInBase . (\(Neo4j r) -> r conn)
 --    restoreM (StNeo4j x) = Neo4j $ const $ restoreM x
 
-instance J.FromJSON Version where
-    parseJSON (J.Object v) = v .: "neo4j_version" >>= (\s -> return $ fst . last $ readP_to_S parseVersion s)
+instance J.FromJSON Neo4jVersion where
+    parseJSON (J.Object v) = liftM (Neo4jVersion . fst . last . readP_to_S parseVersion) (v .: "neo4j_version")
     parseJSON _ = mzero
 
