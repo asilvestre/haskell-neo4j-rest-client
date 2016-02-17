@@ -53,6 +53,9 @@ data TraversalOrder = BreadthFirst | DepthFirst deriving (Eq, Show)
 data ReturnFilter = ReturnAll | ReturnAllButStartNode deriving (Eq, Show)
 
 type RelFilter = (RelationshipType, Direction)
+newtype RelFilterT = RelFilterT {runRelFilter :: RelFilter} -- Useful to make a ToJSON instance of the type alias
+
+newtype MaybeUniqueness = MaybeUniqueness {runMaybeUniqueness :: Maybe Uniqueness} -- Useful for ToJSON of type alias
 
 -- | Type containing all info describing a traversal request
 data TraversalDesc = TraversalDesc {
@@ -66,8 +69,8 @@ data TraversalDesc = TraversalDesc {
 traversalReqBody :: TraversalDesc -> L.ByteString
 traversalReqBody (TraversalDesc ord relfilt uniq depth nodefilt) = J.encode $ J.object [
         "order" .= J.toJSON ord,
-        "relationships" .= relfilt,
-        "uniqueness" .= uniq,
+        "relationships" .= map RelFilterT relfilt,
+        "uniqueness" .= MaybeUniqueness uniq,
         depthField depth,
         "return_filter" .= returnField nodefilt
         ]
@@ -88,19 +91,19 @@ instance J.ToJSON ReturnFilter where
     toJSON ReturnAllButStartNode = J.String "all_but_start_node"
 
 -- | How to codify RelFilter values into JSON
-instance J.ToJSON RelFilter where
-    toJSON (rType, dir) = J.object ["direction" .= dirToJson dir, "type" .= J.toJSON rType]
+instance J.ToJSON RelFilterT where
+    toJSON (RelFilterT (rType, dir)) = J.object ["direction" .= dirToJson dir, "type" .= J.toJSON rType]
         where dirToJson Outgoing = J.String "out"
               dirToJson Incoming = J.String "in"
               dirToJson Any = J.String "all"
 
 -- | How to codify uniqueness values into JSON
-instance J.ToJSON (Maybe Uniqueness) where
-    toJSON Nothing = J.String "none"
-    toJSON (Just NodeGlobal) = J.String "node_global"
-    toJSON (Just RelationshipGlobal) = J.String "relationship_global"
-    toJSON (Just NodePathUnique) = J.String "node_path"
-    toJSON (Just RelationshipPath) = J.String "relationship_path"
+instance J.ToJSON MaybeUniqueness where
+    toJSON (MaybeUniqueness Nothing) = J.String "none"
+    toJSON (MaybeUniqueness (Just NodeGlobal)) = J.String "node_global"
+    toJSON (MaybeUniqueness (Just RelationshipGlobal)) = J.String "relationship_global"
+    toJSON (MaybeUniqueness (Just NodePathUnique)) = J.String "node_path"
+    toJSON (MaybeUniqueness (Just RelationshipPath)) = J.String "relationship_path"
 
 instance Default TraversalDesc where
     def = TraversalDesc {travOrder = BreadthFirst, travRelFilter = [], travUniqueness = Nothing,
