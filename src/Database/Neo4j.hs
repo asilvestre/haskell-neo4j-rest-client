@@ -17,6 +17,7 @@ module Database.Neo4j (
 
     -- * Connection handling objects
     Connection, Hostname, Port, Credentials, newConnection, withConnection, newAuthConnection, withAuthConnection,
+    newSecureConnection, withSecureConnection, newSecureAuthConnection, withSecureAuthConnection,
     -- * Main monadic type to handle sequences of commands to Neo4j
     Neo4j(..),
     -- * Constructing and managing node/relationship properties
