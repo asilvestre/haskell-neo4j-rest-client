@@ -47,6 +47,7 @@ Test-Suite test-haskell-neo4j-rest-client
                    , Cabal
                    , text                        >= 1.1
                    , http-client                 >= 0.4
+                   , http-client-tls             >= 0.2
                    , http-conduit                >= 2.1
                    , http-types                  >= 0.8
                    , resourcet                   >= 1.1
@@ -78,6 +79,7 @@ library
                      , containers            >= 0.5
                      , text                  >= 1.1
                      , http-client           >= 0.4
+                     , http-client-tls       >= 0.2
                      , http-conduit          >= 2.1
                      , http-types            >= 0.8
                      , bytestring            >= 0.10

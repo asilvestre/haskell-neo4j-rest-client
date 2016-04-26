@@ -327,6 +327,7 @@ data Connection = Connection {dbHostname :: Hostname
                              ,dbPort :: Port
                              ,manager :: HC.Manager
                              ,dbCredentials :: Maybe Credentials
+                             ,dbSecure :: Bool
                              }
 
 type Hostname = S.ByteString
