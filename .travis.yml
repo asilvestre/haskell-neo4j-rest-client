@@ -24,11 +24,9 @@ install:
   - travis_retry cabal update
   - cabal install --only-dependencies --enable-tests --enable-benchmarks
   - cabal configure --enable-tests --enable-benchmarks
-  - pip install httpie
 
 script:
 # setup neo4j test db with a default password.
-  - http -a neo4j:neo4j POST http://localhost:7474/user/neo4j/password password=test
   - cabal build && cabal test
 
 jdk:
