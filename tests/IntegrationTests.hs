@@ -84,7 +84,7 @@ host :: Hostname
 host = "localhost"
 
 creds :: Credentials
-creds = ("neo4j","neo4j")
+creds = ("neo4j","test")
 
 someOtherProperties :: Properties
 someOtherProperties = M.fromList ["hola" |: ("adeu" :: T.Text), "proparray" |: ["a" :: T.Text, "", "adeu"]]
