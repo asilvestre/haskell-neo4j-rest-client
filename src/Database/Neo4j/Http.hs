@@ -11,7 +11,7 @@ import Data.Maybe (fromMaybe)
 import Data.Aeson ((.:))
 import Data.Aeson.Types (parseMaybe)
 
-import Network.HTTP.Client (defaultManagerSettings)
+import Network.HTTP.Client.TLS (tlsManagerSettings)
 
 import Text.ParserCombinators.ReadP
 
@@ -27,39 +27,68 @@ import Database.Neo4j.Types
 -- | Create a new connection that can be manually closed with runResourceT
 newConnection :: Hostname -> Port -> IO Connection
 newConnection hostname port = do
-        mgr <- HC.newManager defaultManagerSettings
-        return $ Connection hostname port mgr Nothing
+        mgr <- HC.newManager tlsManagerSettings
+        return $ Connection hostname port mgr Nothing False
+
+-- | Create a new https connection that can be manually closed with runResourceT
+newSecureConnection :: Hostname -> Port -> IO Connection
+newSecureConnection hostname port = do
+        mgr <- HC.newManager tlsManagerSettings
+        return $ Connection hostname port mgr Nothing True
 
 -- | Create a new connection that can be manually closed with runResourceT using provided credentials for basic auth
 newAuthConnection :: Hostname -> Port -> Credentials -> IO Connection
 newAuthConnection hostname port creds = do
-        mgr <- HC.newManager defaultManagerSettings
-        return $ Connection hostname port mgr (Just creds)
+        mgr <- HC.newManager tlsManagerSettings
+        return $ Connection hostname port mgr (Just creds) False
+
+-- | Create a new https connection that can be manually closed with runResourceT using provided credentials for basic auth
+newSecureAuthConnection :: Hostname -> Port -> Credentials -> IO Connection
+newSecureAuthConnection hostname port creds = do
+        mgr <- HC.newManager tlsManagerSettings
+        return $ Connection hostname port mgr (Just creds) True
 
 -- | Run a set of Neo4j commands in a single connection
 withConnection :: Hostname -> Port -> Neo4j a -> IO a
 withConnection hostname port cmds = runResourceT $ do
-         mgr <- liftIO $ HC.newManager defaultManagerSettings
-         let conn = Connection hostname port mgr Nothing
+         mgr <- liftIO $ HC.newManager tlsManagerSettings
+         let conn = Connection hostname port mgr Nothing False
          liftIO $ runNeo4j cmds conn
+
+-- | Run a set of Neo4j commands in a single https connection
+withSecureConnection :: Hostname -> Port -> Neo4j a -> IO a
+withSecureConnection hostname port cmds = runResourceT $ do
+         mgr <- liftIO $ HC.newManager tlsManagerSettings
+         let conn = Connection hostname port mgr Nothing True
+         liftIO $ runNeo4j cmds conn
+
 
 -- | Run a set of Neo4j commands in a single connection using provided credentials for basic auth
 withAuthConnection :: Hostname -> Port -> Credentials -> Neo4j a -> IO a
 withAuthConnection hostname port creds cmds = runResourceT $ do
-         mgr <- liftIO $ HC.newManager defaultManagerSettings
-         let conn = Connection hostname port mgr (Just creds)
+         mgr <- liftIO $ HC.newManager tlsManagerSettings
+         let conn = Connection hostname port mgr (Just creds) False
          liftIO $ runNeo4j cmds conn
-       
+
+-- | Run a set of Neo4j commands in a single https connection using provided credentials for basic auth
+withSecureAuthConnection :: Hostname -> Port -> Credentials -> Neo4j a -> IO a
+withSecureAuthConnection hostname port creds cmds = runResourceT $ do
+         mgr <- liftIO $ HC.newManager tlsManagerSettings
+         let conn = Connection hostname port mgr (Just creds) True
+         liftIO $ runNeo4j cmds conn
+
+
 -- | General function for HTTP requests
 httpReq :: Connection -> HT.Method -> S.ByteString -> L.ByteString -> (HT.Status -> Bool) ->
      IO (HC.Response L.ByteString)
-httpReq (Connection h p m c) method path body statusCheck = do
+httpReq (Connection h p m c s) method path body statusCheck = do
             let request = def {
                     HC.host = h,
                     HC.port = p,
                     HC.path = path,
                     HC.method = method,
                     HC.requestBody = HC.RequestBodyLBS body,
+                    HC.secure = s,
                     HC.checkStatus = \s _ _ -> if statusCheck s
                                                  then Nothing
                                                  else Just (toException $ Neo4jUnexpectedResponseException s),
