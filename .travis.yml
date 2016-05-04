@@ -28,7 +28,8 @@ install:
 
 script:
 # setup neo4j test db with a default password.
-  - curl -vvv --header "Content-Type: application/json" -X POST -d '{"password": "test"}' http://neo4j:neo4j@localhost:7474/user/neo4j/password
+  - >
+      curl -vvv --header "Content-Type: application/json" -X POST -d '{"password": "test"}' http://neo4j:neo4j@localhost:7474/user/neo4j/password
   - cabal build && cabal test
 
 jdk:
