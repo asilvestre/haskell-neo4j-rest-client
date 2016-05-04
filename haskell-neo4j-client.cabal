@@ -1,5 +1,5 @@
 name:                haskell-neo4j-client
-version:             0.3.2.1
+version:             0.3.2.2
 synopsis:            A Haskell neo4j client
 description:         
     Library to interact with Neo4j databases. 
@@ -15,6 +15,8 @@ description:
        -Traversal API
     .
        -Authentication
+    .
+       -SSL
     .
     All code has been tested with Neo4j versions 2.0.3, 2.1.5, 2.1.7, 2.2.0 and 2.2.1
 homepage:            https://github.com/asilvestre/haskell-neo4j-rest-client
