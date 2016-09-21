@@ -49,6 +49,14 @@ assertException exExc action = do
     where --checkExc :: (Exception e, Show e) => Maybe e -> Assertion
           checkExc Nothing = assertFailure $ "Expected exception " <> show exExc <> " but none raised"
           checkExc (Just e) = assertEqual "" exExc e
+
+assertFException :: (Neo4jException -> Assertion) -> IO a -> Assertion
+assertFException f action = do
+        resExc <- getException action
+        checkExc resExc
+    where --checkExc :: (Exception e, Show e) => Maybe e -> Assertion
+          checkExc Nothing = assertFailure $ "Expected exception but none raised"
+          checkExc (Just e) = f e
     
 -- | handy assertEqual inside a Neo4j monad
 neo4jEqual :: (Show a, Eq a) => a -> a -> Neo4j ()
@@ -98,8 +106,8 @@ myRelType = "MYREL"
 
 -- | Test connecting to a non-existing server
 case_NoConnection :: Assertion
-case_NoConnection = assertException expException $ withConnection "localhost" 77 $ createNode someProperties
-    where expException = Neo4jHttpException "FailedConnectionException2 \"localhost\" 77 False connect: does not exist (Connection refused)"
+case_NoConnection = assertFException f $ withConnection "localhost" 77 $ createNode someProperties
+    where f e = assertBool "" $ e == Neo4jHttpException "FailedConnectionException2 \"localhost\" 77 False connect: does not exist (Connection refused)" || e == Neo4jHttpException "HttpExceptionRequest Request {\n  host                 = \"localhost\"\n  port                 = 77\n  secure               = False\n  requestHeaders       = [(\"Accept\",\"application/json; charset=UTF-8\"),(\"Content-Type\",\"application/json\")]\n  path                 = \"/db/data/node\"\n  queryString          = \"\"\n  method               = \"POST\"\n  proxy                = Nothing\n  rawBody              = False\n  redirectCount        = 10\n  responseTimeout      = ResponseTimeoutDefault\n  requestVersion       = HTTP/1.1\n}\n (ConnectionFailure connect: does not exist (Connection refused))"
 
 -- | Test connecting to a server with improper credentials
 case_ImproperCredentials :: Assertion

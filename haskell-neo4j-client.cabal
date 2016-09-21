@@ -99,4 +99,3 @@ library
                      , transformers-base     >= 0.4
                      , mtl                   >= 2.1
                      , network-uri           >= 2.6
-  extensions: CPP
