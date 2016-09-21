@@ -14,6 +14,9 @@ cache:
   - $HOME/.cabal
   - $HOME/.stack
 
+env:
+  - NEO4J_VERSION="2.2.1"
+
 # The different configurations we want to test. We have BUILD=cabal which uses
 # cabal-install, and BUILD=stack which uses Stack. More documentation on each
 # of those below.
@@ -56,11 +59,6 @@ matrix:
     compiler: ": #GHC HEAD"
     addons: {apt: {packages: [cabal-install-head,ghc-head,happy-1.19.5,alex-3.1.7], sources: [hvr-ghc]}}
 
-  # Neo4J versions
-  - env:  NEO4J_VERSION="2.2.1"
-  - env:  NEO4J_VERSION="2.1.7"
-  - env:  NEO4J_VERSION="2.0.3"
-
   # The Stack builds. We can pass in arbitrary Stack arguments via the ARGS
   # variable, such as using --stack-yaml to point to a different file.
   - env: BUILD=stack ARGS=""
@@ -77,6 +75,18 @@ matrix:
 
   - env: BUILD=stack ARGS="--resolver lts-6"
     compiler: ": #stack 7.10.3"
+    addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
+
+  - env: BUILD=stack ARGS="--resolver lts-7" NEO4J_VERSION="2.2.1"
+    compiler: ": #stack 8.0.1"
+    addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
+
+  - env: BUILD=stack ARGS="--resolver lts-7" NEO4J_VERSION="2.1.7"
+    compiler: ": #stack 8.0.1"
+    addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
+
+  - env: BUILD=stack ARGS="--resolver lts-7" NEO4J_VERSION="2.0.3"
+    compiler: ": #stack 8.0.1"
     addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
 
   # Nightly builds are allowed to fail
@@ -98,6 +108,10 @@ matrix:
     os: osx
 
   - env: BUILD=stack ARGS="--resolver lts-6"
+    compiler: ": #stack 7.10.3 osx"
+    os: osx
+
+  - env: BUILD=stack ARGS="--resolver lts-7" NEO4J_VERSION="2.2.1"
     compiler: ": #stack 7.10.3 osx"
     os: osx
 
