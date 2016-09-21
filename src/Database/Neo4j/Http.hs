@@ -77,12 +77,17 @@ withSecureAuthConnection hostname port creds cmds = runResourceT $ do
          let conn = Connection hostname port mgr (Just creds) True
          liftIO $ runNeo4j cmds conn
 
+#if MIN_VERSION_http_client(0,4,30)
+defaultReq = HC.defaultRequest
+#else
+defaultReq = def
+#endif
 
 -- | General function for HTTP requests
 httpReq :: Connection -> HT.Method -> S.ByteString -> L.ByteString -> (HT.Status -> Bool) ->
      IO (HC.Response L.ByteString)
 httpReq (Connection h p m c s) method path body statusCheck = do
-            let request = HC.defaultRequest {
+            let request = defaultReq {
                     HC.host = h,
                     HC.port = p,
                     HC.path = path,
