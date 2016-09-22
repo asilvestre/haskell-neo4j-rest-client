@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings  #-}
 
 module Database.Neo4j.Http where
@@ -77,21 +78,33 @@ withSecureAuthConnection hostname port creds cmds = runResourceT $ do
          let conn = Connection hostname port mgr (Just creds) True
          liftIO $ runNeo4j cmds conn
 
+#if MIN_VERSION_http_client(0,4,30)
+defaultReq = HC.defaultRequest
+#else
+defaultReq = def
+#endif
 
 -- | General function for HTTP requests
 httpReq :: Connection -> HT.Method -> S.ByteString -> L.ByteString -> (HT.Status -> Bool) ->
      IO (HC.Response L.ByteString)
 httpReq (Connection h p m c s) method path body statusCheck = do
-            let request = def {
+            let request = defaultReq {
                     HC.host = h,
                     HC.port = p,
                     HC.path = path,
                     HC.method = method,
                     HC.requestBody = HC.RequestBodyLBS body,
                     HC.secure = s,
+#if MIN_VERSION_http_client(0,5,0)
+                    HC.checkResponse = \_ r -> let s = HC.responseStatus r in 
+                                                 if statusCheck s
+                                                 then return ()
+                                                 else throw (Neo4jUnexpectedResponseException s),
+#else
                     HC.checkStatus = \s _ _ -> if statusCheck s
                                                  then Nothing
                                                  else Just (toException $ Neo4jUnexpectedResponseException s),
+#endif
                     HC.requestHeaders = [(HT.hAccept, "application/json; charset=UTF-8"),
                                           (HT.hContentType, "application/json")]}
             -- TODO: Would be better to use exceptions package Control.Monad.Catch ??
