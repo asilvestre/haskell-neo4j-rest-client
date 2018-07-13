@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -41,8 +42,10 @@ import qualified Network.HTTP.Types as HT
 
 newtype Neo4jVersion = Neo4jVersion {runVersion :: Version}
 
+#if __GLASGOW_HASKELL__ < 841
 (<>) :: (Monoid a) => a -> a -> a
 (<>) = mappend
+#endif
 
 -- | Type for a single value of a Neo4j property
 data Val = IntVal Int64 | BoolVal Bool | TextVal T.Text | DoubleVal Double deriving (Show, Eq)
