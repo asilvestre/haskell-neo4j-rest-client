@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings  #-}
 {-# LANGUAGE FlexibleInstances, TemplateHaskell #-}
 module Main where
@@ -33,8 +34,10 @@ import qualified Database.Neo4j.Graph as G
 import qualified Database.Neo4j.Transactional.Cypher as TC
 import qualified Database.Neo4j.Traversal as T
 
+#if __GLASGOW_HASKELL__ < 841
 (<>) :: Monoid a => a -> a -> a
 (<>) = mappend
+#endif
 
 -- Get the string of a exception raised by an action
 getException :: IO a -> IO (Maybe Neo4jException)
